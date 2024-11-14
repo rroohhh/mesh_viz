@@ -2,19 +2,28 @@
 
 import imgui
 
-def dump_var(n, name):
-    value = n.get_current_var_value(n.data.variables[name])
-    l = len(value)
-    value = int(value, 2)
-    imgui.text(name + " " + '{:#0{}x}'.format(value, 2 + l // 4))
+def dump_var(n, var):
+    value = n.get_current_var_value(var)
+    imgui.text(var.name + " " + var.format(value))
+    # l = len(value)
+    # value = int(value, 2)
+    # imgui.text(name + " " + '{:#0{}x}'.format(value, 2 + l // 4))
 
 def process(n):
     imgui.text(f"[{n.x}, {n.y}]")
+    var = n.data.subscopes["router_i"].subscopes["memory_mapped_router_internal"].variables["local_in__payload"]
+    dump_var(n, var)
     if (imgui.button("in")):
-        n.add_var_to_viewer(n.data.variables["in_flit"])
-        n.add_var_to_viewer(n.data.variables["in_valid"])
-        n.add_var_to_viewer(n.data.variables["in_ready"])
+        # n.add_var_to_viewer(n.data.variables["in_flit"])
+        # n.add_var_to_viewer(n.data.variables["in_valid"])
+        # n.add_var_to_viewer(n.data.variables["in_ready"])
+        n.add_var_to_viewer(n.data.variables["tx_accept_north"])
+        n.add_var_to_viewer(n.data.variables["tx_accept_south"])
+        n.add_var_to_viewer(n.data.variables["tx_accept_east"])
+        n.add_var_to_viewer(n.data.variables["tx_accept_west"])
         n.add_var_to_viewer(n.data.variables["clk"])
+        # print("hello")
+        n.add_var_to_viewer(var)
 
     # dump_var(n, "in_flit")
     # dump_var(n, "in_valid")
