@@ -7,7 +7,7 @@ char * FstFile::get_value_at(handle_t handle, uint64_t time) {
 }
 uint64_t FstFile::max_time() { return fstReaderGetEndTime(reader); }
 uint64_t FstFile::min_time() { return fstReaderGetStartTime(reader); }
-void FstFile::read_changes(uint64_t min_time, uint64_t max_time, std::vector<NodeVar> & vars, value_change_cb_t cb) {
+void FstFile::read_changes(uint64_t min_time, uint64_t max_time, const std::vector<NodeVar> & vars, value_change_cb_t cb) {
     fstReaderClrFacProcessMaskAll(reader);
     for(const auto & var : vars) { fstReaderSetFacProcessMask(reader, var.handle); }
     fstReaderIterBlocksSetNativeDoublesOnCallback(reader, 1);
@@ -128,4 +128,19 @@ FstFile::FstFile(const char * path) : reader(fstReaderOpen(path)), buffer(nullpt
 FstFile::~FstFile() {
     fstReaderClose(reader);
     if(buffer) { delete[] buffer; }
+}
+
+bool all_zero(const char * string) {
+    while(*string) {
+        if((string++)[0] != '0') return false;
+    }
+    return true;
+}
+
+WaveDatabase FstFile::read_wave_db(NodeVar var) {
+    std::vector<WaveValue> values;
+    read_changes(min_time(), max_time(), {var}, [&](uint64_t time, handle_t, const unsigned char * value) {
+        values.push_back(WaveValue{time, all_zero((const char *) value) ? WaveValueType::Zero : WaveValueType::NonZero});
+    });
+    return WaveDatabase(values);
 }

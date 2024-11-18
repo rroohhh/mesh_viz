@@ -22,7 +22,7 @@ struct NodeVar {
     std::shared_ptr<Formatter> formatter;
 
     NodeVar(std::string name, uint64_t nbits, handle_t handle, std::shared_ptr<Node> owner_node, std::shared_ptr<Formatter> formatter)
-        : name(name), nbits(nbits), handle(handle), owner_node(owner_node), formatter(std::move(formatter)) {}
+        : name(name), nbits(nbits), owner_node(owner_node), formatter(std::move(formatter)), handle(handle) {}
 
     char * value_at_time(clock_t time) const;
 
@@ -35,6 +35,15 @@ private:
     friend Node;
     friend FstFile;
     friend WaveformViewer;
+};
+
+template <>
+struct std::formatter<NodeVar, char> {
+    constexpr auto parse(std::format_parse_context & ctx) { return ctx.begin(); }
+
+    auto format(const auto & s, auto & ctx) const {
+        return std::format_to(ctx.out(), "NodeVar{{name={}, nbits={}}}", s.name, s.nbits);
+    }
 };
 
 struct NodeData {

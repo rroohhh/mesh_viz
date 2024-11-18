@@ -17,7 +17,7 @@ struct Timeline {
 
     Timeline(FstFile * file);
 
-    auto render(float zoom, int64_t offset, uint64_t cursor_value, ImRect bb);
+    auto render(float zoom, float offset, uint64_t cursor_value, ImRect bb);
 };
 
 const auto MIN_TEXT_SIZE = 20;
@@ -29,8 +29,6 @@ auto clip_text_to_width(std::span<char> text, float pixels);
 const auto FEATHER_SIZE = 4.0f;
 // const auto FEATHER_SIZE = 0.0f;
 const auto MOUSE_WHEEL_DRAG_FACTOR = 10.0f;
-
-bool all_zero(const char * string);
 
 struct WaveformViewer {
 private:
@@ -44,17 +42,9 @@ private:
     float label_width = 100, waveform_width = 100;
 
     mutable std::mutex mutex;
-    handle_t                                            maxHandle = 0;
-    std::set<fstHandle>                                 facs;
-    std::vector<std::vector<std::pair<ImVec2, size_t>>> bases;
-    std::vector<std::tuple<uint64_t, int64_t, int64_t>> old_values;
 
-    std::vector<std::vector<ImVec2>> lines_a;
-    std::vector<std::vector<ImVec2>> lines_b;
-
-    // fst handle, time, size
-    std::vector<std::tuple<fstHandle, int64_t, float>> text_to_draw;
-
+    handle_t maxHandle = 0;
+    std::map<handle_t, WaveDatabase>                   fac_dbs;
 public:
     WaveformViewer(FstFile * file);
 

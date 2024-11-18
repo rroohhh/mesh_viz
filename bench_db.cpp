@@ -8,7 +8,7 @@ auto bench(const std::vector<Value> & values) {
   T db(values);
 
   auto start = std::chrono::high_resolution_clock::now();
-  int N = 100;
+  int N = 10;
 
   uint32_t checksum = 0;
   uint32_t query_count = 0;

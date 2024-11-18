@@ -8,7 +8,7 @@ using simtime_t      = uint64_t;
 using simtimedelta_t = int64_t;
 
 #include "node.h"
-
+#include "wave_data_base.h"
 
 using value_change_cb_t = std::function<void(uint64_t time, handle_t facidx, const unsigned char * value)>;
 
@@ -30,7 +30,9 @@ struct FstFile {
     static void value_change_callback2(void * user_callback_data_pointer, uint64_t time, handle_t facidx,
                                        const unsigned char * value, uint32_t len);
 
-    void read_changes(uint64_t min_time, uint64_t max_time, std::vector<NodeVar> & vars, value_change_cb_t cb);
+    void read_changes(uint64_t min_time, uint64_t max_time, const std::vector<NodeVar> & vars, value_change_cb_t cb);
+
+    WaveDatabase read_wave_db(NodeVar var);
 
     uint64_t min_time();
 
