@@ -2,6 +2,11 @@
 #include "mesh_utils.cpp"
 #include <print>
 
+template<class T>
+struct ParamsWrap {
+    using Params = T;
+};
+
 char * FstFile::get_value_at(handle_t handle, uint64_t time) {
     return fstReaderGetValueFromHandleAtTime(reader, time, handle, buffer);
 }
@@ -11,8 +16,8 @@ void FstFile::read_changes(uint64_t min_time, uint64_t max_time, const std::vect
     fstReaderClrFacProcessMaskAll(reader);
     for(const auto & var : vars) { fstReaderSetFacProcessMask(reader, var.handle); }
     fstReaderIterBlocksSetNativeDoublesOnCallback(reader, 1);
-    // fstReaderSetLimitTimeRange(reader, min_time, max_time);
-    fstReaderSetUnlimitedTimeRange(reader);
+    fstReaderSetLimitTimeRange(reader, min_time, max_time);
+    // fstReaderSetUnlimitedTimeRange(reader);
     fstReaderIterBlocks2(reader, FstFile::value_change_callback, FstFile::value_change_callback2, &cb, nullptr);
 }
 void FstFile::value_change_callback2(void * user_callback_data_pointer, uint64_t time, handle_t facidx,
@@ -93,7 +98,7 @@ std::vector<std::shared_ptr<Node>> FstFile::read_nodes() {
         case FST_HT_ATTRBEGIN: {
             auto attr = hier->u.attr;
             if(attr.typ == FST_AT_MISC and attr.subtype == FST_MT_COMMENT) {
-                auto parsed   = parse_attr(attr.name);
+                auto parsed   = parse_attr<ParamsWrap<TraceFPGABandwidthParams>, ParamsWrap<PoissonEventTrafficParams>>(attr.name);
                 auto nodeattr = std::get_if<NodeAttr>(&parsed);
                 if(nodeattr) {
                     assert(not in_node_scope);

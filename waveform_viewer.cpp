@@ -189,15 +189,15 @@ uint64_t WaveformViewer::render() {
 
     // waveform labels
     {
-
         min = ImGui::GetCursorScreenPos() + ImVec2(0, timeline_height);
         ImGui::SetCursorScreenPos(min);
 
-        ImGui::Separator();
-
         ImGui::PushClipRect(min, min + sz, false);
         ImGui::SetNextWindowScroll(ImVec2(0.0, -1.0));
+
+        // TODO(robin): mouse io for this
         ImGui::BeginChild("waveforms");
+        ImGui::Dummy(ImVec2(0.0, 10.0));
         auto size_x = ImGui::GetContentRegionAvail().x;
 
         ImGuiListClipper clipper;
@@ -205,6 +205,7 @@ uint64_t WaveformViewer::render() {
         while(clipper.Step()) {
             for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
                 auto & var = vars[i];
+                // std::println("var: {}", var.name);
 
                 auto   base      = ImGui::GetCursorScreenPos();
 
@@ -217,7 +218,7 @@ uint64_t WaveformViewer::render() {
 
                 ImGui::PushID(i);
 
-                if(ImGui::Selectable(text_span.data(), false, 0, ImVec2(ImGui::GetContentRegionAvail().x - waveform_width, 0.0))) std::println("selected {}", i);
+                if(ImGui::Selectable(text_span.data(), false, 0, ImVec2(ImGui::GetContentRegionAvail().x - waveform_width - 5.0f, 0.0))) std::println("selected {}", i);
                 ImGui::SameLine();
                 ImGui::Separator();
                 ImGui::SameLine();
@@ -255,11 +256,13 @@ uint64_t WaveformViewer::render() {
 
                     // these get floored, because otherwise the not anti aliased rendering fucks up
                     // clip left edge
-                    auto old_screen_time = floor(max((old_value.timestamp + offset) * zoom, 0));
-                    // right edge gets automatically clipped
-                    auto new_screen_time      = floor(::min((value.timestamp + offset) * zoom, size_x - base.x));
-                    auto previous_screen_time = floor(::min((previous.timestamp + offset) * zoom, size_x - base.x));
+                    auto old_screen_time = floor((old_value.timestamp + offset) * zoom);
+                    auto new_screen_time      = floor((value.timestamp + offset) * zoom);
+                    auto previous_screen_time = floor((previous.timestamp + offset) * zoom);
 
+                    // std::println("v {} p {} o {}", value, previous, old_value);
+
+                    if (new_screen_time > 0) {
                     // add initial point
                     if(lines_a.size() == 0) {
                         if(var.is_vector()) {
@@ -286,17 +289,26 @@ uint64_t WaveformViewer::render() {
 
                     if(var.is_vector()) {
                         lines_a.push_back(base + ImVec2(new_screen_time - FEATHER_SIZE / 2, y_size));
-                        lines_a.push_back(base + ImVec2(new_screen_time, y_size / 2.0));
-                        lines_a.push_back(base + ImVec2(new_screen_time + FEATHER_SIZE / 2, y_size));
+                        if(new_screen_time < (size_x - base.x)) {
+                            lines_a.push_back(base + ImVec2(new_screen_time, y_size / 2.0));
+                            lines_a.push_back(base + ImVec2(new_screen_time + FEATHER_SIZE / 2, y_size));
+                        }
 
                         lines_b.push_back(
                             base + ImVec2(new_screen_time - FEATHER_SIZE / 2, y_size * (1.0 - (int)previous.type)));
-                        lines_b.push_back(base + ImVec2(new_screen_time, y_size / 2.0));
-                        lines_b.push_back(base +
-                                          ImVec2(new_screen_time + FEATHER_SIZE / 2, y_size * (1.0 - (int)value.type)));
+                        if(new_screen_time < (size_x - base.x)) {
+                            lines_b.push_back(base + ImVec2(new_screen_time, y_size / 2.0));
+                            lines_b.push_back(base +
+                                            ImVec2(new_screen_time + FEATHER_SIZE / 2, y_size * (1.0 - (int)value.type)));
+                        }
                     } else {
+                        if(new_screen_time > 0.0f)
                         lines_a.push_back(base + ImVec2(new_screen_time, y_size * (1.0 - (int)previous.type)));
-                        lines_a.push_back(base + ImVec2(new_screen_time, y_size * (1.0 - (int)value.type)));
+                        if(new_screen_time < (size_x - base.x)) {
+                            lines_a.push_back(base + ImVec2(new_screen_time, y_size * (1.0 - (int)value.type)));
+                        }
+                    }
+
                     }
 
                     auto text_space = (new_screen_time - max(0, previous_screen_time));

@@ -81,36 +81,32 @@ std::span<char> BinaryFormatter::format(char * signal) {
 std::span<char> HexFormatter::format(char * signal) {
     res.clear();
 
+    auto len = strlen(signal);
+    auto step = len % 4;
+
     char table[16]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
-    bool run = true;
-    while(run) {
-        uint8_t idx = 0;
-        if(signal[0] == '\0') {
-            run = false;
-            res += table[idx];
-        } else if(signal[1] == '\0') {
-            idx |= (signal[0] == '1') << 0;
-            run = false;
-            res += table[idx];
-        } else if(signal[2] == '\0') {
-            idx |= (signal[0] == '1') << 0;
-            idx |= (signal[1] == '1') << 1;
-            run = false;
-            res += table[idx];
-        } else if(signal[3] == '\0') {
-            idx |= (signal[0] == '1') << 0;
-            idx |= (signal[1] == '1') << 1;
-            idx |= (signal[2] == '1') << 2;
-            run = false;
-            res += table[idx];
+    while(len > 0) {
+        uint8_t fmt_idx = 0;
+        if(step == 1) {
+            fmt_idx |= (signal[0] == '1') << 0;
+        } else if(step == 2) {
+            fmt_idx |= (signal[1] == '1') << 0;
+            fmt_idx |= (signal[0] == '1') << 1;
+        } else if(step == 3) {
+            fmt_idx |= (signal[2] == '1') << 0;
+            fmt_idx |= (signal[1] == '1') << 1;
+            fmt_idx |= (signal[0] == '1') << 2;
         } else {
-            idx |= (signal[0] == '1') << 0;
-            idx |= (signal[1] == '1') << 1;
-            idx |= (signal[2] == '1') << 2;
-            idx |= (signal[3] == '1') << 3;
-            signal += 4;
-            res += table[idx];
+            fmt_idx |= (signal[3] == '1') << 0;
+            fmt_idx |= (signal[2] == '1') << 1;
+            fmt_idx |= (signal[1] == '1') << 2;
+            fmt_idx |= (signal[0] == '1') << 3;
         }
+
+        res += table[fmt_idx];
+        len -= step;
+        signal += step;
+        step = 4;
     }
     return {res};
 }
