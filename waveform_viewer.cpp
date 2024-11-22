@@ -51,7 +51,7 @@ auto Timeline::render(float zoom, float offset, uint64_t cursor_value, ImRect bb
     if(playing) { cursor_value += 1; }
 
     first_time                   = clip(min_time - (int64_t)floor(offset), min_time, max_time);
-    uint64_t last_time_unclipped = first_time + width / zoom;
+    int64_t last_time_unclipped = first_time + width / zoom;
     last_time                    = clip(last_time_unclipped, min_time, max_time);
     bool draw_last               = last_time_unclipped > max_time;
 

@@ -2,9 +2,10 @@
 #include <chrono>
 #include <map>
 #include <fstream>
+#include <print>
 
 template<class T>
-auto bench(const std::vector<Value> & values) {
+auto bench(const std::vector<WaveValue> & values) {
   T db(values);
 
   auto start = std::chrono::high_resolution_clock::now();
@@ -38,15 +39,15 @@ auto bench(const std::vector<Value> & values) {
 
 int main() {
   std::ifstream i("../wdb_perf.csv");
-  std::map<uint32_t, std::vector<Value>> values;
+  std::map<uint32_t, std::vector<WaveValue>> values;
   for (std::string line; std::getline(i, line); ) {
     auto parts_range = line | std::views::split(std::string_view(", ")) | std::views::transform([](auto sv) { return std::string{std::string_view{sv}}; });
     std::vector<std::string> parts{std::ranges::begin(parts_range), std::ranges::end(parts_range)};
     uint32_t timestamp = std::stol(parts[0]);
     uint32_t fac = std::stol(parts[1]);
     uint32_t value = std::stol(parts[2]);
-    auto [vals, _] = values.try_emplace(fac, std::vector<Value>{});
-    vals->second.emplace_back(timestamp, (ValueType) value);
+    auto [vals, _] = values.try_emplace(fac, std::vector<WaveValue>{});
+    vals->second.emplace_back(timestamp, (WaveValueType) value);
   }
 
 

@@ -13,8 +13,7 @@ uint32_t WaveValue::pack() const { return (timestamp << ValueTypeBits) | (uint32
 
 namespace impl {
     template <bool BINARY_SEARCH>
-    template <std::ranges::input_range IRange>
-    UncompressedWaveDatabase<BINARY_SEARCH>::UncompressedWaveDatabase(IRange values)
+    UncompressedWaveDatabase<BINARY_SEARCH>::UncompressedWaveDatabase(std::span<const WaveValue> values)
         : values(values | std::views::transform(&WaveValue::pack) | std::ranges::to<std::vector>()), internal_idx(0) {}
 
     template <bool BINARY_SEARCH>
@@ -82,7 +81,7 @@ namespace impl {
   // template struct UncompressedWaveDatabase<false>;
   // template struct UncompressedWaveDatabase<true>;
 
-    auto EliasFanoWaveDatabase::init_data(const std::vector<WaveValue> & values) -> EncoderT::CompressedList {
+    auto EliasFanoWaveDatabase::init_data(std::span<const WaveValue> values) -> EncoderT::CompressedList {
         EncoderT encoder(values.size(), values.back().pack());
         for(const auto & v : values) { encoder.add(v.pack()); }
         return encoder.finish();
@@ -131,7 +130,7 @@ namespace impl {
         return WaveValue::unpack(reader.value());
     }
 
-    EliasFanoWaveDatabase::EliasFanoWaveDatabase(const std::vector<WaveValue> & values)
+    EliasFanoWaveDatabase::EliasFanoWaveDatabase(std::span<const WaveValue> values)
         : data(init_data(values)), reader(data), max(values.back().pack()),
           size(EncoderT::Layout::fromUpperBoundAndSize(values.size(), max).bytes()) {
 
@@ -143,7 +142,7 @@ namespace impl {
   // template struct EliasFanoWaveDatabase<impl::EncoderT, impl::ReaderT>;
 
     template <class... DBS>
-    BenchmarkingDatabase<DBS...>::BenchmarkingDatabase(const std::vector<WaveValue> & values)
+    BenchmarkingDatabase<DBS...>::BenchmarkingDatabase(std::span<const WaveValue> values)
         : the_db(find_best_db(values)) {}
 
     template <class... DBS>
@@ -182,7 +181,7 @@ namespace impl {
     }
 
     template <class... DBS>
-    std::variant<DBS...> BenchmarkingDatabase<DBS...>::find_best_db(const std::vector<WaveValue> & values) {
+    std::variant<DBS...> BenchmarkingDatabase<DBS...>::find_best_db(std::span<const WaveValue> values) {
         std::tuple<DBS...> dbs{DBS{values}...};
 
         double                              best_time;
@@ -227,7 +226,8 @@ namespace impl {
         return *ret;
     }
 
-std::pair<uint32_t, uint32_t> work(auto & db) {
+template<class DB>
+std::pair<uint32_t, uint32_t> work(DB & db) {
     db.rewind();
     // 10M points, 2000 pixels -> about 2000 queries per pixel
     // TODO(robin): sweep this
@@ -253,4 +253,12 @@ std::pair<uint32_t, uint32_t> work(auto & db) {
 }
 
 template struct BenchmarkingDatabase<UncompressedWaveDatabase<true>, UncompressedWaveDatabase<false>, EliasFanoWaveDatabase>;
+
+template std::pair<uint32_t, uint32_t> work<>(WaveDatabase & db);
+template std::pair<uint32_t, uint32_t> work<>(UncompressedWaveDatabase<false> & db);
+template std::pair<uint32_t, uint32_t> work<>(UncompressedWaveDatabase<true> & db);
+template std::pair<uint32_t, uint32_t> work<>(EliasFanoWaveDatabase & db);
+
+template struct impl::UncompressedWaveDatabase<true>;
+template struct impl::UncompressedWaveDatabase<false>;
 }

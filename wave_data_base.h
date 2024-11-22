@@ -46,8 +46,7 @@ namespace impl {
         std::vector<uint32_t> values;
         size_t                internal_idx;
 
-        template <std::ranges::input_range IRange>
-        UncompressedWaveDatabase(IRange values);
+        UncompressedWaveDatabase(std::span<const WaveValue> values);
 
         WaveValue get(size_t idx);
 
@@ -75,7 +74,7 @@ namespace impl {
         uint32_t                 max;
         size_t                   size;
 
-        EliasFanoWaveDatabase(const std::vector<WaveValue> & values);
+        EliasFanoWaveDatabase(std::span<const WaveValue> values);
 
         WaveValue get(size_t idx);
 
@@ -93,7 +92,7 @@ namespace impl {
         WaveValue last();
 
     private:
-        static EncoderT::CompressedList init_data(const std::vector<WaveValue> & values);
+        static EncoderT::CompressedList init_data(std::span<const WaveValue> values);
     };
 
 // polymorphism was slower :(
@@ -101,7 +100,7 @@ template <class... DBS>
 struct BenchmarkingDatabase {
     std::variant<DBS...> the_db;
 
-    BenchmarkingDatabase(const std::vector<WaveValue> & values);
+    BenchmarkingDatabase(std::span<const WaveValue> values);
 
     WaveValue get(size_t idx);
 
@@ -119,8 +118,11 @@ struct BenchmarkingDatabase {
     WaveValue last();
 
 private:
-    static std::variant<DBS...> find_best_db(const std::vector<WaveValue> & values);
+    static std::variant<DBS...> find_best_db(std::span<const WaveValue> values);
 };
+
+template <class DB>
+std::pair<uint32_t, uint32_t> work(DB & db);
 }
 
 

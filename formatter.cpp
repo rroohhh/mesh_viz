@@ -11,7 +11,10 @@ void impl::from_json(const json & j, Const & n) {
     bigint i(j.at("value").template get<std::string>());
     n.value = i;
 }
-void impl::from_json(const json & j, Signal & n) {}
+
+// sentinel
+void impl::from_json(const json &, Signal &) {}
+
 void impl::from_json(const json & j, Operator & n) {
     j.at("operator").get_to(n.op);
     j.at("operands").get_to(n.operands);
@@ -143,7 +146,7 @@ bigint FixedFormatter::visit_stmt(const impl::Operator & op, const bigint & s) {
         return visit_stmt(op.operands[0], s) == visit_stmt(op.operands[1], s);
     } else {
         std::println("op: {}", op.op);
-        assert(false);
+        std::unreachable();
     }
 }
 bigint FixedFormatter::visit_stmt(const impl::SwitchValue & sv, const bigint & s) {
@@ -157,7 +160,7 @@ bigint FixedFormatter::visit_stmt(const impl::SwitchValue & sv, const bigint & s
             }
         }
     }
-    assert(false);
+    std::unreachable();
 }
 bigint FixedFormatter::visit_stmt(const impl::FormatStatementP & stmt, const bigint & s) {
     return visit_stmt(*stmt, s);
@@ -165,7 +168,7 @@ bigint FixedFormatter::visit_stmt(const impl::FormatStatementP & stmt, const big
 bigint FixedFormatter::visit_stmt(const impl::FormatStatement & stmt, const bigint & s) {
     return std::visit([&](auto stmt) { return visit_stmt(stmt, s); }, stmt);
 }
-void FixedFormatter::visit_chunk(const impl::Literal & lit, const bigint & s) { cache += lit; }
+void FixedFormatter::visit_chunk(const impl::Literal & lit, const bigint &) { cache += lit; }
 void FixedFormatter::visit_chunk(const impl::Formatted & fmt, const bigint & s) {
     auto value = visit_stmt(fmt.arg, s);
     if(fmt.specifier == "") {

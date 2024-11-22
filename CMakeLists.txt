@@ -32,13 +32,13 @@ target_compile_options(mesh_viz
   PRIVATE $<$<COMPILE_LANGUAGE:C>: -DFST_CONFIG_INCLUDE=\"fstapi.h\"  -O3 -march=native -mtune=native -fdiagnostics-color=always -Wall -Wextra >
 )
 
-target_include_directories(mesh_viz PRIVATE imgui imgui/backends ../toplevel  ${Boost_INCLUDE_DIRS})
-
 target_link_libraries(mesh_viz PRIVATE pybind11::embed c++ glfw z GL ${Boost_LIBRARIES} Folly::folly)
+
+target_include_directories(mesh_viz PRIVATE imgui imgui/backends ../toplevel ${Boost_INCLUDE_DIRS} ${FOLLY_INCLUDE_DIRS})
 
 
 add_executable(bench_db bench_db.cpp)
-target_sources(mesh_viz PRIVATE wave_data_base.cpp)
+target_sources(bench_db PRIVATE wave_data_base.cpp)
 
 # -ggdb
 target_compile_options(bench_db PRIVATE $<$<COMPILE_LANGUAGE:CXX>: -std=c++23 -O3 -march=native -mtune=native -fdiagnostics-color=always -Wall -Wextra>)
