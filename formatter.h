@@ -106,49 +106,49 @@ void from_json(const json& j, FormatChunk& n);
 
 struct Formatter
 {
-	virtual std::span<char> format(char* signal) = 0;
+	virtual std::span<char> format(char* signal) const = 0;
 	virtual ~Formatter() {};
 };
 
 struct BinaryFormatter : public Formatter
 {
-	std::span<char> format(char* signal) override;
+	std::span<char> format(char* signal) const override;
 };
 
 struct HexFormatter : public Formatter
 {
-	std::string res;
-	std::span<char> format(char* signal) override;
+	mutable std::string res;
+	std::span<char> format(char* signal) const override;
 };
 
 struct FixedFormatter : public Formatter
 {
 	std::vector<impl::FormatChunk> chunks;
-	std::string cache;
-	std::string cache_cleaned;
+	mutable std::string cache;
+	mutable std::string cache_cleaned;
 
-	std::span<char> format(char* signal) override;
+	std::span<char> format(char* signal) const override;
 
 private:
-	bigint visit_stmt(const impl::Slice& slice, const bigint& s);
+	bigint visit_stmt(const impl::Slice& slice, const bigint& s) const;
 
-	bigint visit_stmt(const impl::Const& c, const bigint&);
+	bigint visit_stmt(const impl::Const& c, const bigint&) const;
 
-	bigint visit_stmt(const impl::Signal&, const bigint& s);
+	bigint visit_stmt(const impl::Signal&, const bigint& s) const;
 
-	bigint visit_stmt(const impl::Operator& op, const bigint& s);
+	bigint visit_stmt(const impl::Operator& op, const bigint& s) const;
 
-	bigint visit_stmt(const impl::SwitchValue& sv, const bigint& s);
+	bigint visit_stmt(const impl::SwitchValue& sv, const bigint& s) const;
 
-	bigint visit_stmt(const impl::FormatStatementP& stmt, const bigint& s);
+	bigint visit_stmt(const impl::FormatStatementP& stmt, const bigint& s) const;
 
-	bigint visit_stmt(const impl::FormatStatement& stmt, const bigint& s);
+	bigint visit_stmt(const impl::FormatStatement& stmt, const bigint& s) const;
 
-	void visit_chunk(const impl::Literal& lit, const bigint& s);
+	void visit_chunk(const impl::Literal& lit, const bigint& s) const;
 
-	void visit_chunk(const impl::Formatted& fmt, const bigint& s);
+	void visit_chunk(const impl::Formatted& fmt, const bigint& s) const;
 
-	bigint bin_to_bigint(const char* signal);
+	bigint bin_to_bigint(const char* signal) const;
 };
 
 void from_json(const json& j, FixedFormatter& n);

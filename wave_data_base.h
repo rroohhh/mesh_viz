@@ -81,6 +81,8 @@ struct UncompressedWaveDatabase
 	void rewind();
 
 	WaveValue last();
+
+	uint32_t size();
 };
 
 struct EliasFanoWaveDatabase
@@ -93,7 +95,7 @@ struct EliasFanoWaveDatabase
 	EncoderT::CompressedList data;
 	ReaderT reader;
 	uint32_t max;
-	size_t size;
+	size_t bytes_size;
 
 	EliasFanoWaveDatabase(std::span<const WaveValue> values);
 
@@ -111,6 +113,8 @@ struct EliasFanoWaveDatabase
 	void rewind();
 
 	WaveValue last();
+
+	uint32_t size();
 
 private:
 	static EncoderT::CompressedList init_data(std::span<const WaveValue> values);
@@ -138,6 +142,8 @@ struct BenchmarkingDatabase
 	void rewind();
 
 	WaveValue last();
+
+	uint32_t size();
 
 private:
 	static std::variant<DBS...> find_best_db(std::span<const WaveValue> values);

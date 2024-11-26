@@ -1,8 +1,11 @@
 #include "nodes_panel.h"
+#include "imgui.h"
 #include "utils.cpp"
+#include "waveform_viewer.h"
+#include "histogram.h"
 
-NodesPanel::NodesPanel(std::vector<std::shared_ptr<Node>> nodes, WaveformViewer* viewer) :
-    nodes(nodes), viewer(viewer)
+NodesPanel::NodesPanel(std::vector<std::shared_ptr<Node>> nodes, WaveformViewer* viewer, Histograms* histograms) :
+    nodes(nodes), viewer(viewer), histograms(histograms)
 {
 }
 
@@ -12,6 +15,8 @@ void NodesPanel::render(
     const ImVec2& size,
     const std::function<void(std::shared_ptr<Node>)>& process_func)
 {
+	auto min = ImGui::GetCursorScreenPos();
+	auto sz = ImGui::GetContentRegionAvail();
 	ImGui::Text("tick %lu", current_time);
 	ImGui::SetNextItemAllowOverlap();
 	ImGui::InvisibleButton(
@@ -43,7 +48,10 @@ void NodesPanel::render(
 		pos += io.MouseDelta;
 	}
 
+	auto draw = ImGui::GetForegroundDrawList();
+	draw->PushClipRect(min, min + sz);
 	for (auto& node : nodes) {
-		node->render(current_time, offset + pos, zoom, process_func, viewer);
+		node->render(current_time, offset + pos, zoom, process_func, viewer, histograms);
 	}
+	draw->PopClipRect();
 }

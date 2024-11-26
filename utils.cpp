@@ -1,3 +1,18 @@
+template <>
+struct std::formatter<ImVec2, char>
+{
+	constexpr auto parse(std::format_parse_context& ctx)
+	{
+		return ctx.begin();
+	}
+
+	auto format(const auto& s, auto& ctx) const
+	{
+		return std::format_to(ctx.out(), "ImVec2{{x={}, y={}}}", s.x, s.y);
+	}
+};
+
+
 inline ImVec2 operator-(const ImVec2& a, const ImVec2& b)
 {
 	return {a.x - b.x, a.y - b.y};

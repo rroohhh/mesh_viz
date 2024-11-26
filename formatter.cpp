@@ -85,17 +85,18 @@ void impl::from_json(const json& j, FormatChunk& n)
 		n = j.template get<Formatted>();
 	}
 }
-std::span<char> BinaryFormatter::format(char* signal)
+std::span<char> BinaryFormatter::format(char* signal) const
 {
-	// TODO(robin): this is annoying
+	// TODO(robin): this is annoying, make this a std::span from the beginning
 	return {signal, strlen(signal)};
 }
-std::span<char> HexFormatter::format(char* signal)
+std::span<char> HexFormatter::format(char* signal) const
 {
 	res.clear();
 
 	auto len = strlen(signal);
 	auto step = len % 4;
+	if (step == 0) step = 4;
 
 	char table[16]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 	while (len > 0) {
@@ -123,7 +124,7 @@ std::span<char> HexFormatter::format(char* signal)
 	}
 	return {res};
 }
-std::span<char> FixedFormatter::format(char* signal)
+std::span<char> FixedFormatter::format(char* signal) const
 {
 	cache.clear();
 	auto s = bin_to_bigint(signal);
@@ -145,21 +146,21 @@ std::span<char> FixedFormatter::format(char* signal)
 	}
 	return {cache_cleaned};
 }
-bigint FixedFormatter::visit_stmt(const impl::Slice& slice, const bigint& s)
+bigint FixedFormatter::visit_stmt(const impl::Slice& slice, const bigint& s) const
 {
 	bigint mask(0);
 	boost::multiprecision::bit_set(mask, slice.stop - slice.start);
 	return (visit_stmt(slice.value, s) >> slice.start) & (mask - 1);
 }
-bigint FixedFormatter::visit_stmt(const impl::Const& c, const bigint&)
+bigint FixedFormatter::visit_stmt(const impl::Const& c, const bigint&) const
 {
 	return c.value;
 }
-bigint FixedFormatter::visit_stmt(const impl::Signal&, const bigint& s)
+bigint FixedFormatter::visit_stmt(const impl::Signal&, const bigint& s) const
 {
 	return s;
 }
-bigint FixedFormatter::visit_stmt(const impl::Operator& op, const bigint& s)
+bigint FixedFormatter::visit_stmt(const impl::Operator& op, const bigint& s) const
 {
 	if (op.op == "+") {
 		return visit_stmt(op.operands[0], s) + visit_stmt(op.operands[1], s);
@@ -170,7 +171,7 @@ bigint FixedFormatter::visit_stmt(const impl::Operator& op, const bigint& s)
 		std::unreachable();
 	}
 }
-bigint FixedFormatter::visit_stmt(const impl::SwitchValue& sv, const bigint& s)
+bigint FixedFormatter::visit_stmt(const impl::SwitchValue& sv, const bigint& s) const
 {
 	auto test = visit_stmt(sv.test, s);
 	for (const auto& c : sv.cases) {
@@ -186,19 +187,19 @@ bigint FixedFormatter::visit_stmt(const impl::SwitchValue& sv, const bigint& s)
 	}
 	std::unreachable();
 }
-bigint FixedFormatter::visit_stmt(const impl::FormatStatementP& stmt, const bigint& s)
+bigint FixedFormatter::visit_stmt(const impl::FormatStatementP& stmt, const bigint& s) const
 {
 	return visit_stmt(*stmt, s);
 }
-bigint FixedFormatter::visit_stmt(const impl::FormatStatement& stmt, const bigint& s)
+bigint FixedFormatter::visit_stmt(const impl::FormatStatement& stmt, const bigint& s) const
 {
 	return std::visit([&](auto stmt) { return visit_stmt(stmt, s); }, stmt);
 }
-void FixedFormatter::visit_chunk(const impl::Literal& lit, const bigint&)
+void FixedFormatter::visit_chunk(const impl::Literal& lit, const bigint&) const
 {
 	cache += lit;
 }
-void FixedFormatter::visit_chunk(const impl::Formatted& fmt, const bigint& s)
+void FixedFormatter::visit_chunk(const impl::Formatted& fmt, const bigint& s) const
 {
 	auto value = visit_stmt(fmt.arg, s);
 	if (fmt.specifier == "") {
@@ -213,7 +214,7 @@ void FixedFormatter::visit_chunk(const impl::Formatted& fmt, const bigint& s)
 		assert(false);
 	}
 }
-bigint FixedFormatter::bin_to_bigint(const char* signal)
+bigint FixedFormatter::bin_to_bigint(const char* signal) const
 {
 	bigint i;
 

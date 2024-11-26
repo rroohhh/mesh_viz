@@ -1,5 +1,6 @@
 #include "node.h"
 
+#include "histogram.h"
 #include "utils.cpp"
 #include "waveform_viewer.h"
 
@@ -18,25 +19,36 @@ void Node::render_data(const NodeData& data, float width) const
 		}
 	}
 }
+
 void Node::render(
     uint64_t c_time,
     const ImVec2& offset,
     const float& zoom,
     std::function<void(std::shared_ptr<Node>)> process_func,
-    WaveformViewer* v)
+    WaveformViewer* v,
+    Histograms* hist)
 {
 	viewer = v;
+	histograms = hist;
 	current_time = c_time;
 	auto label = std::format("[{}, {}]", x, y);
 	ImGui::PushID(label.c_str());
 	// std::println("{}", data);
 	auto size = ImVec2(NODE_SIZE, NODE_SIZE) * zoom;
-	auto base = ImVec2(x * (1.5 * NODE_SIZE), y * (1.5 * NODE_SIZE)) * zoom;
+	auto base = ImVec2(x * (1.5 * NODE_SIZE), -y * (1.5 * NODE_SIZE)) * zoom;
 	auto min = offset + base;
 	auto max = offset + base + size;
 	if (ImGui::IsRectVisible(min, max)) {
 		auto draw = ImGui::GetWindowDrawList();
-		draw->AddRect(min, max, NODE_COL);
+		if (role.is_fpga) {
+			draw->AddRect(min, max, FPGA_COL);
+		} else {
+			draw->AddRect(min, max, NODE_COL);
+		}
+		if (highlight) {
+			draw->AddRect(
+			    min - ImVec2(2, 2), max + ImVec2(2, 2), NODE_HIGHLIGHT_COL, 0.0f, 0, 4.0f);
+		}
 		// auto label_size = ImGui::CalcTextSize(label.c_str());
 		// auto node_size = max - min;
 
@@ -45,9 +57,7 @@ void Node::render(
 		// }
 		// + ImVec2{0, ImGui::GetTextLineHeight()}
 		ImGui::SetCursorScreenPos(min);
-		ImGui::BeginGroup();
-		ImGui::PushItemWidth(NODE_SIZE * zoom);
-
+		ImGui::BeginChild(label.c_str(), size);
 		try {
 			process_func(this->shared_from_this());
 		} catch (const std::exception& e) {
@@ -55,21 +65,24 @@ void Node::render(
 			// std::println("exception while executing python code: {}", std::current_exception());
 		}
 		// render_data(data, NODE_SIZE * zoom);
-		ImGui::PopItemWidth();
-		ImGui::EndGroup();
+		ImGui::EndChild();
 	}
 	ImGui::PopID();
+
+	highlight = false;
 }
 
 char* NodeVar::value_at_time(clock_t time) const
 {
 	return owner_node->value_at_time(*this, time);
 }
-bool NodeVar::is_vector()
+
+bool NodeVar::is_vector() const
 {
 	return nbits > 1;
 }
-std::span<char> NodeVar::format(char* value)
+
+std::span<char> NodeVar::format(char* value) const
 {
 	return formatter->format(value);
 }
@@ -88,4 +101,41 @@ char* Node::value_at_time(const NodeVar& var, simtime_t time)
 void Node::add_var_to_viewer(const NodeVar& var)
 {
 	viewer->add(var);
+}
+
+void Node::add_hist(const NodeVar& var, const NodeVar& sampling_var, const std::vector<NodeVar> & conditions, const std::vector<NodeVar> & masks)
+{
+	histograms->add(var, sampling_var, conditions, masks);
+}
+
+Node::Node(
+    int x,
+    int y,
+    NodeData data,
+    FstFile* ctx,
+    NodeRoleAttr role,
+    decltype(system_config) system_config) :
+    x(x), y(y), data(data), role(role), system_config(system_config), ctx(ctx)
+{
+}
+
+NodeVar::NodeVar(
+    std::string name,
+    uint64_t nbits,
+    handle_t handle,
+    std::shared_ptr<Node> owner_node,
+    std::shared_ptr<Formatter> formatter,
+    decltype(NodeVar::attrs) attrs) :
+    name(name),
+    nbits(nbits),
+    owner_node(owner_node),
+    formatter(std::move(formatter)),
+    attrs(attrs),
+    handle(handle)
+{
+}
+
+std::string NodeVar::pretty_name() const
+{
+	return std::format("[{},{}] {}", owner_node->x, owner_node->y, name);
 }

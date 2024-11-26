@@ -96,6 +96,11 @@ WaveValue UncompressedWaveDatabase<BINARY_SEARCH>::last()
 	return WaveValue::unpack(values.back());
 }
 
+template <bool BINARY_SEARCH>
+uint32_t UncompressedWaveDatabase<BINARY_SEARCH>::size() {
+	return values.size();
+}
+
 // template struct UncompressedWaveDatabase<false>;
 // template struct UncompressedWaveDatabase<true>;
 
@@ -116,6 +121,11 @@ void EliasFanoWaveDatabase::rewind()
 WaveValue EliasFanoWaveDatabase::last()
 {
 	return WaveValue::unpack(max);
+}
+
+uint32_t EliasFanoWaveDatabase::size()
+{
+	return reader.size();
 }
 
 std::optional<WaveValue> EliasFanoWaveDatabase::previous_value()
@@ -161,7 +171,7 @@ std::optional<WaveValue> EliasFanoWaveDatabase::skip_to(WaveValue to_find)
 
 uint32_t EliasFanoWaveDatabase::memory_usage()
 {
-	return size;
+	return bytes_size;
 }
 
 WaveValue EliasFanoWaveDatabase::get(size_t idx)
@@ -174,7 +184,7 @@ EliasFanoWaveDatabase::EliasFanoWaveDatabase(std::span<const WaveValue> values) 
     data(init_data(values)),
     reader(data),
     max(values.back().pack()),
-    size(EncoderT::Layout::fromUpperBoundAndSize(values.size(), max).bytes())
+    bytes_size(EncoderT::Layout::fromUpperBoundAndSize(values.size(), max).bytes())
 {
 	// for (auto & v : values) {
 	//     std::println("{}", v);
@@ -232,6 +242,12 @@ WaveValue BenchmarkingDatabase<DBS...>::last()
 }
 
 template <class... DBS>
+uint32_t BenchmarkingDatabase<DBS...>::size()
+{
+	return std::visit([&](auto& db) { return db.size(); }, the_db);
+}
+
+template <class... DBS>
 std::variant<DBS...> BenchmarkingDatabase<DBS...>::find_best_db(std::span<const WaveValue> values)
 {
 	std::tuple<DBS...> dbs{DBS{values}...};
@@ -247,9 +263,11 @@ std::variant<DBS...> BenchmarkingDatabase<DBS...>::find_best_db(std::span<const 
 			    const auto N = 100;
 
 			    uint32_t checksum = 0;
+				uint32_t query_count = 0;
 			    for (int i = 0; i <= N; i++) {
 				    const auto& [check, ops] = work(db);
 				    checksum += check;
+					query_count += ops;
 			    }
 			    std::chrono::duration<double, std::nano> duration =
 			        std::chrono::high_resolution_clock::now() - start;
@@ -269,10 +287,14 @@ std::variant<DBS...> BenchmarkingDatabase<DBS...>::find_best_db(std::span<const 
 				    best = Is;
 				    best_time = score;
 			    }
+				std::println(
+					"check: {}, mem: {} MB, dur: {}ms, ops: {}, per query: {}ns", checksum,
+					db.memory_usage() / 1024.0f / 1024.0f, duration.count() / 1e6, query_count,
+					duration.count() / query_count);
 		    }(),
 		    ...);
 		std::println("found best db: {}", best);
-		((best == Is && (void(ret.emplace(std::move(std::get<Is>(dbs)))), 1)) || ...);
+		void(((best == Is && (void(ret.emplace(std::move(std::get<Is>(dbs)))), 1)) || ...));
 	}(std::make_index_sequence<sizeof...(DBS)>{}));
 
 	return *ret;

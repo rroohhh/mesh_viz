@@ -13,8 +13,7 @@
 struct Timeline
 {
 	FstFile* file;
-	bool playing = false;
-	uint64_t first_time, last_time;
+	uint32_t first_time, last_time;
 
 	Timeline(FstFile* file);
 
@@ -35,26 +34,38 @@ struct WaveformViewer
 {
 private:
 	FstFile* file;
+	Highlights * highlights;
 	Timeline timeline;
 	float zoom = 1.0;
 	float offset_f = 0.0;
 	uint64_t cursor_value = 0;
+	float window_zoom_start = 0, window_zoom_end = 0;
+	bool did_window_zoom = false;
 
 	float timeline_height = 100, waveforms_height = 100;
 	float label_width = 100, waveform_width = 100;
+	bool playing = false;
 
 	mutable std::mutex mutex;
 
-	handle_t maxHandle = 0;
 	std::map<handle_t, WaveDatabase> fac_dbs;
 
 public:
-	WaveformViewer(FstFile* file);
+	WaveformViewer(FstFile* file, Highlights * highlights);
 
 	uint64_t render();
 
-	void add(const NodeVar& var);
+	void add(const NodeVar& var, std::span<std::string> group_hier = {});
 
 private:
 	std::vector<NodeVar> vars;
+
+	// just dummy vectors, maybe quicker than allocing for every waveform
+	std::vector<ImVec2> lines_a;
+	std::vector<ImVec2> lines_b;
+	std::vector<ImVec2> highlights_to_draw;
+	// time and pos and space
+	std::vector<std::tuple<simtime_t, float, float>> text_to_draw;
+
+	void draw_waveform(int64_t first_time, int64_t last_time, const NodeVar& var);
 };

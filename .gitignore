@@ -10,3 +10,6 @@ imgui.ini
 imgui/
 libfst/
 wdb_perf.csv
+
+perf.data
+*.svg

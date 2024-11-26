@@ -54,7 +54,7 @@ int main()
 		uint32_t timestamp = std::stol(parts[0]);
 		uint32_t fac = std::stol(parts[1]);
 		uint32_t value = std::stol(parts[2]);
-		auto [vals, _] = values.try_emplace(fac, std::vector<WaveValue>{});
+		auto [vals, _] = values.try_emplace(fac);
 		vals->second.emplace_back(timestamp, (WaveValueType) value);
 	}
 
