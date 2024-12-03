@@ -59,8 +59,8 @@ struct FstFile
 	char* get_value_at(handle_t handle, uint64_t time) const;
 
 	template<class T>
-	std::vector<T> read_values(NodeVar var) const;
+	std::vector<T> read_values(const NodeVar & var) const;
 
 	template<class T>
-	std::pair<std::vector<simtime_t>, std::vector<T>> read_values(const NodeVar& var, const NodeVar& sampling_var, std::span<const NodeVar> conditions, std::span<const NodeVar> masks) const;
+	std::pair<std::vector<simtime_t>, std::vector<T>> read_values(const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge = false) const;
 };

@@ -101,7 +101,7 @@ struct Node : public std::enable_shared_from_this<Node>
 	void add_var_to_viewer(const NodeVar& var);
 
 	// TODO(robin): too lazy to make this span, pybind11 doesnt have it by default
-	void add_hist(const NodeVar& var, const NodeVar& sampling_var, const std::vector<NodeVar> & conditions = {}, const std::vector<NodeVar> & masks = {});
+	void add_hist(const NodeVar& var, const NodeVar& sampling_var, const std::vector<NodeVar> & conditions = {}, const std::vector<NodeVar> & masks = {}, bool negedge = false);
 
 	// TODO(robin): encapsulate this
 	FstFile* ctx;

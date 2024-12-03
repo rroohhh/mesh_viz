@@ -57,6 +57,8 @@ def process(n):
         return int(n.get_current_var_value(v), 2)
 
     clk_var = var("clk")
+    out_valid_var = var("out_valid")
+    out_ready_var = var("out_ready")
 
     def dump(d):
         # print("hello", d.name)
@@ -71,7 +73,7 @@ def process(n):
                 if imgui.selectable("add to viewer", False)[0]:
                     n.add_var_to_viewer(v)
                 if imgui.selectable("show histogram", False)[0]:
-                    n.add_hist(v, clk_var)
+                    n.add_hist(v, clk_var, [out_valid_var, out_ready_var], [], True)
                 imgui.end_popup()
 
 
@@ -142,7 +144,7 @@ def process(n):
             if imgui.selectable("add to viewer", False)[0]:
                 n.add_var_to_viewer(mo_var)
             if imgui.selectable("show histogram", False)[0]:
-                n.add_hist(mo_var, clk_var)
+                n.add_hist(mo_var, clk_var, [], [], True)
             imgui.end_popup()
         text_center_in(str(mo), master_min, master_max)
 
@@ -158,7 +160,7 @@ def process(n):
             if imgui.selectable("add to viewer", False)[0]:
                 n.add_var_to_viewer(to_var)
             if imgui.selectable("show histogram", False)[0]:
-                n.add_hist(to_var, clk_var)
+                n.add_hist(to_var, clk_var, [], [], True)
             imgui.end_popup()
 
         text_center_in(str(to), target_min, target_max)
@@ -228,16 +230,35 @@ def __main__(nodes):
     import numpy as np
     MUX_COUNT = 4 # TODO(robin): pass this through to sim
 
+    n0 = [n for n in nodes if n.x == 0 and n.y == 0][0]
+    out_valid_var = n0.data.variables["out_valid"]
+    out_ready_var = n0.data.variables["out_ready"]
+    clk_var = n0.data.variables["clk"]
+    received = n0.read_values(n0.data.variables["flits_received"], clk_var, [out_valid_var, out_ready_var], [], True)[1][-1]
+    max_latency = np.max(n0.read_values(n0.data.variables["flit_latency"], clk_var, [out_valid_var, out_ready_var], [], True)[1])
+
+    sent = 0
+    max_outstanding = 0
+    for n in nodes:
+        if n.x != 0 or n.y != 0:
+            in_valid_var = n.data.variables["in_valid"]
+            in_ready_var = n.data.variables["in_ready"]
+            clk_var = n.data.variables["clk"]
+            sent += n.read_values(n.data.variables["flits_sent"], clk_var, [in_valid_var, in_ready_var], [], True)[1][-1]
+            p_to_send = n.read_values(n.data.variables["packets_to_send"], clk_var, [], [], True)[1]
+            p_sent = n.read_values(n.data.variables["packets_sent"], clk_var, [], [], True)[1]
+            max_outstanding = max(np.max(p_to_send - p_sent), max_outstanding)
+
     sc = nodes[0].system_config
-    print(sc.height, sc.width, sc.link_delay, sc.node_params.packet_len, sc.node_params.p, sc.event_params.e)
+    print(sc.height, sc.width, sc.link_delay, sc.node_params.packet_len, sc.node_params.p, sc.event_params.e, received, sent, max_latency, max_outstanding)
     for node in nodes:
         clk = node.data.variables["clk"]
         for d in Dir:
             if (name := d.name.lower()) in node.data.subscopes:
                 link = node.data.subscopes[name]
                 link.variables["event_sent"]
-                ev_time, ev_data = node.read_values(link.variables["event_sent"], clk)
-                d_time, d_data = node.read_values(link.variables["data_sent"], clk)
+                ev_time, ev_data = node.read_values(link.variables["event_sent"], clk, [], [], True)
+                d_time, d_data = node.read_values(link.variables["data_sent"], clk, [], [], True)
                 # print(ev_data)
                 # print(ev_time)
                 # print(d_data)

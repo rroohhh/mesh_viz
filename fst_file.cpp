@@ -228,10 +228,8 @@ WaveDatabase FstFile::read_wave_db(NodeVar var) const
 }
 
 
-// TODO(robin): add sampling / conditions to this
-// (for axi streams and clk)
 template <class T>
-std::vector<T> FstFile::read_values(NodeVar var) const
+std::vector<T> FstFile::read_values(const NodeVar & var) const
 {
 	std::vector<T> values;
 	values.reserve(max_time() - min_time() + 1);
@@ -257,7 +255,7 @@ std::vector<T> FstFile::read_values(NodeVar var) const
 
 // TODO(robin): this can be optimized a lot, but we probably dont care
 template <class T>
-std::pair<std::vector<simtime_t>, std::vector<T>> FstFile::read_values(const NodeVar& var, const NodeVar& sampling_var, std::span<const NodeVar> conditions, std::span<const NodeVar> masks) const
+std::pair<std::vector<simtime_t>, std::vector<T>> FstFile::read_values(const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge) const
 {
 	auto var_data = read_values<T>(var);
 	auto sampling_var_data = read_values<T>(sampling_var);
@@ -272,9 +270,11 @@ std::pair<std::vector<simtime_t>, std::vector<T>> FstFile::read_values(const Nod
 
 	std::vector<simtime_t> times;
 	std::vector<uint64_t> values;
+
 	for (simtime_t time = 1; time < var_data.size(); time++) {
 		// trigger on rising edge
-		if ((sampling_var_data[time - 1] == 0) and (sampling_var_data[time] != 0)) {
+		if ((not negedge and (sampling_var_data[time - 1] == 0) and (sampling_var_data[time] != 0))
+			or (negedge and (sampling_var_data[time - 1] != 0) and (sampling_var_data[time] == 0)) ){
 			auto masked	= false;
 			for (auto & mask : mask_data) {
 				masked |= mask[time] != 0;
@@ -294,5 +294,5 @@ std::pair<std::vector<simtime_t>, std::vector<T>> FstFile::read_values(const Nod
 	return {times, values};
 }
 
-template std::vector<uint64_t> FstFile::read_values(NodeVar var) const;
-template std::pair<std::vector<simtime_t>, std::vector<uint64_t>> FstFile::read_values(const NodeVar& var, const NodeVar& sampling_var, std::span<const NodeVar> conditions, std::span<const NodeVar> masks) const;
+template std::vector<uint64_t> FstFile::read_values(const NodeVar & var) const;
+template std::pair<std::vector<simtime_t>, std::vector<uint64_t>> FstFile::read_values(const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge) const;

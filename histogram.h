@@ -27,7 +27,7 @@ private:
 	void update_query();
 
 public:
-	Histogram(const NodeVar& var, Highlights* highlights, FstFile* fstfile, const NodeVar& sampling_var, std::span<const NodeVar> conditions, std::span<const NodeVar> masks);
+	Histogram(const NodeVar& var, Highlights* highlights, FstFile* fstfile, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge);
 
 	bool render(int id);
 };
@@ -42,7 +42,7 @@ private:
 
 public:
 	Histograms(FstFile* fstfile, Highlights* highlights);
-	void add(const NodeVar& var, const NodeVar& sampling_var, std::span<const NodeVar> conditions, std::span<const NodeVar> masks);
+	void add(const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge);
 
 	void render();
 };

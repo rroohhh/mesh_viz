@@ -4,6 +4,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
+#include <print>
 
 namespace py = pybind11;
 using namespace py::literals;
@@ -62,14 +63,13 @@ PYBIND11_EMBEDDED_MODULE(mesh_viz, m)
 	    .def_readonly("data", &Node::data)
 	    .def("get_current_var_value", &Node::get_current_var_value)
 	    .def("add_var_to_viewer", &Node::add_var_to_viewer)
-	    .def("add_hist", &Node::add_hist)
-	    .def("add_hist", [](Node & self, const NodeVar & var, const NodeVar & sampling_var) {
-			return self.add_hist(var, sampling_var);
-		})
-	    .def("read_values", [](Node & self, const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions = {}, std::vector<NodeVar> masks = {}) {
-			auto [a, b] = self.ctx->read_values<uint64_t>(var, sampling_var, conditions, masks);
+	    .def("add_hist", [](Node & self, const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge) {
+			return self.add_hist(var, sampling_var, conditions, masks, negedge);
+		}, py::arg(), py::arg(), "conditions"_a=std::vector<NodeVar>{}, "masks"_a=std::vector<NodeVar>{}, "negedge"_a=false)
+	    .def("read_values", [](Node & self, const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions = {}, std::vector<NodeVar> masks = {}, bool negedge = false) {
+			auto [a, b] = self.ctx->read_values<uint64_t>(var, sampling_var, conditions, masks, negedge);
 			return std::make_pair(as_pyarray(std::move(a)), as_pyarray(std::move(b)));
-		}, py::arg(), py::arg(), "conditions"_a=std::vector<NodeVar>{}, "masks"_a=std::vector<NodeVar>{})
+		}, py::arg(), py::arg(), "conditions"_a=std::vector<NodeVar>{}, "masks"_a=std::vector<NodeVar>{}, "negedge"_a=false)
 	    .def_readonly("system_config", &Node::system_config)
 	    .def_readonly("role", &Node::role)
 		;

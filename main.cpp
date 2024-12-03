@@ -64,8 +64,6 @@ int main(int ac, char ** av) {
 	signal(SIGINT, signalHandler);
 	py::scoped_interpreter guard{}; // start the interpreter and keep it alive
 
-	std::println("filename: {}, module name {}", filename, module_name);
-
 	auto module = py::module::import(module_name.c_str());
 	auto mesh_viz_module = py::module::import("mesh_viz");
 	auto imgui_module = py::module::import("imgui");

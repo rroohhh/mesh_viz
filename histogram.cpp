@@ -11,9 +11,9 @@
 #include <numeric>
 #include <print>
 
-void Histograms::add(const NodeVar& var, const NodeVar& sampling_var, std::span<const NodeVar> conditions, std::span<const NodeVar> masks)
+void Histograms::add(const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge)
 {
-	histograms.emplace_back(Histogram{var, highlights, fstfile, sampling_var, conditions, masks}, id_gen++);
+	histograms.emplace_back(Histogram{var, highlights, fstfile, sampling_var, conditions, masks, negedge}, id_gen++);
 }
 
 void Histograms::render()
@@ -28,10 +28,10 @@ void Histograms::render()
 	    histograms.end());
 }
 
-Histogram::Histogram(const NodeVar& var, Highlights* highlights, FstFile* fstfile, const NodeVar& sampling_var, std::span<const NodeVar> conditions, std::span<const NodeVar> masks) :
+Histogram::Histogram(const NodeVar& var, Highlights* highlights, FstFile* fstfile, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge) :
     highlights(highlights), var(var), data_future{std::async(std::launch::async, [=] {
 	    FstFile my_fstfile(*fstfile);
-	    auto [times, data] = my_fstfile.read_values<uint64_t>(var, sampling_var, conditions, masks);
+	    auto [times, data] = my_fstfile.read_values<uint64_t>(var, sampling_var, conditions, masks, negedge);
 	    return DataT{data, times};
     })}
 {
@@ -56,7 +56,8 @@ bool Histogram::render(int id)
 				    [](int idx, void* inverted_idx_p) {
 					    // NOTE(robin): this is O(N²)
 					    auto inverted_idx = (DataT*) inverted_idx_p;
-					    auto it = std::next(inverted_idx->posting_list.begin(), idx);
+                        auto it = inverted_idx->posting_list.find(inverted_idx->keys[idx]);
+					    // auto it = std::next(inverted_idx->posting_list.begin(), idx);
 					    return ImPlotPoint{(double) it->first, (double) it->second.size()};
 				    },
 				    &*data, data->posting_list.size(), 0.9f);

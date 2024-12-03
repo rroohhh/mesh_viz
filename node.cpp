@@ -4,21 +4,21 @@
 #include "utils.cpp"
 #include "waveform_viewer.h"
 
-void Node::render_data(const NodeData& data, float width) const
-{
-	// for (auto & [name, var] : data.variables) {
-	//     ImGui::Text("V: %s", name.c_str());
-	// }
-	for (auto& [name, d] : data.subscopes) {
-		// std::println("name: {}", name);
-		auto label = std::format("S: {}", name);
-		if (ImGui::CollapsingHeaderWithWidth(label.c_str(), 0, width)) {
-			ImGui::TreePush(label.c_str());
-			render_data(d, width);
-			ImGui::TreePop();
-		}
-	}
-}
+// void Node::render_data(const NodeData& data, float width) const
+// {
+// 	// for (auto & [name, var] : data.variables) {
+// 	//     ImGui::Text("V: %s", name.c_str());
+// 	// }
+// 	for (auto& [name, d] : data.subscopes) {
+// 		// std::println("name: {}", name);
+// 		auto label = std::format("S: {}", name);
+// 		if (ImGui::CollapsingHeaderWithWidth(label.c_str(), 0, width)) {
+// 			ImGui::TreePush(label.c_str());
+// 			render_data(d, width);
+// 			ImGui::TreePop();
+// 		}
+// 	}
+// }
 
 void Node::render(
     uint64_t c_time,
@@ -84,7 +84,12 @@ bool NodeVar::is_vector() const
 
 std::span<char> NodeVar::format(char* value) const
 {
-	return formatter->format(value);
+	// TODO(robin): figure out why this can be null sometimes
+	if (value != nullptr) {
+		return formatter->format(value);
+	} else {
+		return {};
+	}
 }
 
 
@@ -103,9 +108,9 @@ void Node::add_var_to_viewer(const NodeVar& var)
 	viewer->add(var);
 }
 
-void Node::add_hist(const NodeVar& var, const NodeVar& sampling_var, const std::vector<NodeVar> & conditions, const std::vector<NodeVar> & masks)
+void Node::add_hist(const NodeVar& var, const NodeVar& sampling_var, const std::vector<NodeVar> & conditions, const std::vector<NodeVar> & masks, bool negedge)
 {
-	histograms->add(var, sampling_var, conditions, masks);
+	histograms->add(var, sampling_var, conditions, masks, negedge);
 }
 
 Node::Node(
