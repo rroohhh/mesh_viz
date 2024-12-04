@@ -85,6 +85,12 @@ std::optional<WaveValue> UncompressedWaveDatabase<BINARY_SEARCH>::previous_value
 }
 
 template <bool BINARY_SEARCH>
+std::optional<WaveValue> UncompressedWaveDatabase<BINARY_SEARCH>::value()
+{
+	return {WaveValue::unpack(values[internal_idx])};
+}
+
+template <bool BINARY_SEARCH>
 void UncompressedWaveDatabase<BINARY_SEARCH>::rewind()
 {
 	internal_idx = 0;
@@ -130,17 +136,32 @@ uint32_t EliasFanoWaveDatabase::size()
 
 std::optional<WaveValue> EliasFanoWaveDatabase::previous_value()
 {
-	if (reader.position() != 0) {
+	if (reader.position() > 0) {
+		// if (reader.position() == 1) {
+		// 	std::println("pos == 1, value {}, previous value {}", reader.value(), reader.previousValue());
+
+		// 	reader.previous();
+		// 	std::println("pos {}, v {}", reader.position(), reader.value());
+		// 	auto ret = WaveValue::unpack(reader.value());
+		// 	reader.next();
+		// 	std::println("pos {}, v {}", reader.position(), reader.value());
+		// 	return ret;
+		// }
 		return {WaveValue::unpack(reader.previousValue())};
 	}
 	return std::nullopt;
 }
 
+std::optional<WaveValue> EliasFanoWaveDatabase::value()
+{
+	return {WaveValue::unpack(reader.value())};
+}
+
 std::optional<WaveValue> EliasFanoWaveDatabase::jump_to(WaveValue to_find)
 {
 	uint32_t encoded = to_find.timestamp << WaveValue::ValueTypeBits;
-	// if (to_find.timestamp == 1) {
-	//     std::println("max {}, jump_to {}, position {}", max, encoded, reader.position());
+	// if (to_find.timestamp == 188) {
+	//     std::println("max {}, jump_to {}, position {}, value {}", max, encoded, reader.position(), reader.value());
 	// }
 	if (encoded > max) {
 		reader.jumpTo(max);
@@ -148,6 +169,10 @@ std::optional<WaveValue> EliasFanoWaveDatabase::jump_to(WaveValue to_find)
 	}
 	// TODO(robin): is this not always true?
 	if (reader.jumpTo(encoded, true /* assumeDistinct */)) {
+		// if (to_find.timestamp == 188) {
+		// 	std::println("max {}, jump_to {}, position {}, value {}, pv {}", max, encoded, reader.position(), reader.value(), reader.previousValue());
+		// 	// for (int i = 0; i <= reader.position(); i++) std::println("i: {}, v: {}", i, get(i));
+		// }
 		return {WaveValue::unpack(reader.value())};
 	}
 	return std::nullopt;
@@ -230,6 +255,12 @@ std::optional<WaveValue> BenchmarkingDatabase<DBS...>::previous_value()
 }
 
 template <class... DBS>
+std::optional<WaveValue> BenchmarkingDatabase<DBS...>::value()
+{
+	return std::visit([&](auto& db) { return db.value(); }, the_db);
+}
+
+template <class... DBS>
 void BenchmarkingDatabase<DBS...>::rewind()
 {
 	std::visit([&](auto& db) { return db.rewind(); }, the_db);
@@ -260,11 +291,13 @@ std::variant<DBS...> BenchmarkingDatabase<DBS...>::find_best_db(std::span<const 
 		    [&] {
 			    auto db = std::get<Is>(dbs);
 			    auto start = std::chrono::high_resolution_clock::now();
-			    const auto N = 100;
+				// use values.size() as a rough proxy for how long the below loop will take and
+				// use that to estimate the number of rounds we need to get a good timing estimate
+			    const auto N = 1 + 10000 / values.size();
 
 			    uint32_t checksum = 0;
 				uint32_t query_count = 0;
-			    for (int i = 0; i <= N; i++) {
+			    for (size_t i = 0; i <= N; i++) {
 				    const auto& [check, ops] = work(db);
 				    checksum += check;
 					query_count += ops;
@@ -288,7 +321,7 @@ std::variant<DBS...> BenchmarkingDatabase<DBS...>::find_best_db(std::span<const 
 				    best_time = score;
 			    }
 				std::println(
-					"check: {}, mem: {} MB, dur: {}ms, ops: {}, per query: {}ns", checksum,
+					"N: {}, check: {}, mem: {} MB, dur: {}ms, ops: {}, per query: {}ns", N, checksum,
 					db.memory_usage() / 1024.0f / 1024.0f, duration.count() / 1e6, query_count,
 					duration.count() / query_count);
 		    }(),

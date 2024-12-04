@@ -29,7 +29,7 @@ void Histograms::render()
 }
 
 Histogram::Histogram(const NodeVar& var, Highlights* highlights, FstFile* fstfile, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge) :
-    highlights(highlights), var(var), data_future{std::async(std::launch::async, [=] {
+    highlights(highlights), var(var), sampling_var(sampling_var), conditions(conditions), masks(masks), data_future{std::async(std::launch::async, [=] {
 	    FstFile my_fstfile(*fstfile);
 	    auto [times, data] = my_fstfile.read_values<uint64_t>(var, sampling_var, conditions, masks, negedge);
 	    return DataT{data, times};
@@ -37,14 +37,65 @@ Histogram::Histogram(const NodeVar& var, Highlights* highlights, FstFile* fstfil
 {
 }
 
+bool Histogram::HighlightCheckbox(const NodeVar & var, const char * category, bool default_open) {
+	auto label = var.pretty_name();
+	auto stable_id = var.stable_id();
+	auto [it, _] = to_highlight.try_emplace(stable_id, default_open);
+	auto open = &it->second;
+	ImGui::PushID(category);
+	ImGui::Indent();
+	auto old = *open;
+	ImGui::MenuItem(label.c_str(), NULL, open);
+	bool changed = (old != *open) and highlighted;
+	ImGui::Unindent();
+	ImGui::PopID();
+	return changed;
+}
+
 bool Histogram::render(int id)
 {
 	using namespace std::literals::chrono_literals;
 	if (data_future.valid() and data_future.wait_for(0ms) == std::future_status::ready) {
 		data = data_future.get();
+		// we highlight the var by default
+		to_highlight.emplace(var.stable_id(), true);
 	}
-	if (ImGui::Begin(std::format("{} histogram##{}", var.pretty_name(), id).c_str(), &open)) {
+	if (ImGui::Begin(std::format("{} histogram##{}", var.pretty_name(), id).c_str(), &open, ImGuiWindowFlags_MenuBar)) {
         var.owner_node->highlight |= ImGui::IsWindowHovered();
+
+		bool should_update_highlights = false;
+		if(ImGui::BeginMenuBar()) {
+			ImGui::ColorEdit4("highlight color picker", &color.x, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
+			if(highlighted) {
+				(*highlighted)->color = ImGui::ColorConvertFloat4ToU32(color);
+			}
+
+			if (ImGui::BeginMenu("highlight")) {
+				ImGui::Text("variable");
+				should_update_highlights |= HighlightCheckbox(var, "var");
+
+				ImGui::Text("clock");
+				should_update_highlights |= HighlightCheckbox(sampling_var, "clock");
+
+				if (conditions.size() > 0) {
+					ImGui::Text("conditions");
+					for (auto & cond : conditions) {
+						should_update_highlights |= HighlightCheckbox(cond, "cond");
+					}
+				}
+
+				if (masks.size() > 0) {
+					ImGui::Text("masks");
+					for (auto & mask : masks) {
+						should_update_highlights |= HighlightCheckbox(mask, "mask");
+					}
+				}
+				ImGui::EndMenu();
+			}
+
+			ImGui::EndMenuBar();
+		}
+
 
 		if (ImPlot::BeginPlot("histogram", ImVec2(-1, -1))) {
 			ImPlot::SetupAxisScale(ImAxis_Y1, ImPlotScale_Log10);
@@ -106,6 +157,9 @@ bool Histogram::render(int id)
 			}
 			ImPlot::EndPlot();
 		}
+		if (should_update_highlights) {
+			update_highlights();
+		}
 	}
 	ImGui::End();
 	return open;
@@ -114,10 +168,10 @@ bool Histogram::render(int id)
 void Histogram::set_query(decltype(query) new_value)
 {
 	query = new_value;
-	highlighted = std::make_shared<std::vector<WaveDatabase*>>();
+	highlighted = std::make_shared<HighlightEntries>();
 	if (query) {
-		highlights->add(var, *highlighted);
 		update_query();
+		update_highlights();
 	}
 }
 
@@ -125,13 +179,24 @@ Histograms::Histograms(FstFile* fstfile, Highlights* highlights) :
     fstfile(fstfile), highlights(highlights)
 {
 }
+
 void Histogram::update_query()
 {
-	(*highlighted)->clear();
+	(*highlighted)->dbs.clear();
 	for (int i = round(query->X.Min); i <= round(query->X.Max); i++) {
 		auto it = data->posting_list.find(i);
 		if (it != data->posting_list.end()) {
-			(*highlighted)->push_back(&it->second);
+			(*highlighted)->dbs.push_back(&it->second);
+		}
+	}
+}
+
+void Histogram::update_highlights()
+{
+	for (auto & [handle, should_highlight] : to_highlight) {
+		highlights->remove(handle, *highlighted);
+		if (should_highlight) {
+			highlights->add(handle, *highlighted);
 		}
 	}
 }

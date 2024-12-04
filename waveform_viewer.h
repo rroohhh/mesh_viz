@@ -4,9 +4,10 @@
 #include "fst_file.h"
 #include "imgui.h"
 #include "imgui_internal.h"
+
 #include <cstdint>
 #include <mutex>
-#include <set>
+#include <unordered_map>
 #include <span>
 
 
@@ -48,7 +49,7 @@ private:
 
 	mutable std::mutex mutex;
 
-	std::map<handle_t, WaveDatabase> fac_dbs;
+	std::unordered_map<NodeID, WaveDatabase> fac_dbs;
 
 public:
 	WaveformViewer(FstFile* file, Highlights * highlights);
@@ -64,6 +65,7 @@ private:
 	std::vector<ImVec2> lines_a;
 	std::vector<ImVec2> lines_b;
 	std::vector<ImVec2> highlights_to_draw;
+	std::vector<uint32_t> highlight_colors;
 	// time and pos and space
 	std::vector<std::tuple<simtime_t, float, float>> text_to_draw;
 

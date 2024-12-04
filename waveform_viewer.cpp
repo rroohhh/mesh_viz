@@ -2,6 +2,7 @@
 #include "IconsFontAwesome4.h"
 #include "imgui.h"
 #include "utils.cpp"
+#include <future>
 #include <print>
 #include "highlights.h"
 
@@ -111,8 +112,8 @@ void WaveformViewer::add(const NodeVar& var, std::span<std::string> group_hier)
 {
 	auto guard = std::lock_guard(mutex);
 	vars.push_back(var);
-	if (fac_dbs.find(var.handle) == fac_dbs.end()) {
-		fac_dbs.emplace(var.handle, file->read_wave_db(var));
+	if (fac_dbs.find(var.stable_id()) == fac_dbs.end()) {
+		fac_dbs.emplace(var.stable_id(), file->read_wave_db(var));
 	}
 }
 
@@ -332,10 +333,11 @@ void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const 
 	lines_a.clear();
 	lines_b.clear();
 	highlights_to_draw.clear();
+	highlight_colors.clear();
 	text_to_draw.clear();
 
 	auto highlight = highlights->highlight_for(var);
-	auto& db = fac_dbs.at(var.handle);
+	auto& db = fac_dbs.at(var.stable_id());
 
 	uint32_t time = static_cast<uint32_t>(first_time);
 
@@ -350,6 +352,8 @@ void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const 
 	time =
 	    max(ceil(round((old_value.timestamp + offset_f) * zoom + 0.5f) / zoom - offset_f),
 	        old_value.timestamp + 1);
+
+	// std::println("time {}, v {} p {} o {}, this {}", time, current, previous, old_value, db.value());
 
 	while (true) {
 		auto maybe_value = db.skip_to(WaveValue{time, WaveValueType::Zero});
@@ -438,7 +442,7 @@ void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const 
 					max(ceil(next_pixel / zoom - offset_f),
 						hl_start_ts + 1); // value.timestamp + ceil(per_pixel);
 
-				auto should_hl = highlight.should_highlight(hl_start_ts, next);
+				auto [should_hl, hl_color] = highlight.should_highlight(hl_start_ts, next);
 
 				if (should_hl) {
 					// auto start = base + ImVec2(max(old_screen_time, 0), -1);
@@ -453,6 +457,7 @@ void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const 
 					} else {
 						highlights_to_draw.push_back(start);
 						highlights_to_draw.push_back(end);
+						highlight_colors.push_back(hl_color);
 					}
 				}
 				hl_start_ts = next;
@@ -492,6 +497,7 @@ void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const 
 	for (size_t i = 0; i < highlights_to_draw.size(); i+= 2) {
 		auto start = highlights_to_draw[i];
 		auto end = highlights_to_draw[i + 1];
+		auto col = highlight_colors[i / 2];
 		auto w = end.x - start.x;
 		const auto MIN_W = 5.0;
 		if (w < MIN_W) {
@@ -504,11 +510,12 @@ void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const 
 			end.x += (MIN_W - w) / 2.0;
 		}
 		last = end.x;
-		draw->AddRectFilled(start, end, IM_COL32(0x59, 0x28, 0xED, 0x7f));
+		// IM_COL32(0x59, 0x28, 0xED, 0x7f)
+		draw->AddRectFilled(start, end, col);
 	}
 
 	for (auto & [time, screen_time, text_space] : text_to_draw) {
-		char* value = file->get_value_at(var.handle, time);
+		char* value = file->get_value_at(var, time);
 		auto text = var.format(value);
 		auto end = clip_text_to_width(text, text_space - 3 * PADDING - 2 * FEATHER_SIZE);
 		draw->AddText(

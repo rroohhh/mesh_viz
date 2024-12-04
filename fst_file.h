@@ -56,7 +56,7 @@ struct FstFile
 
 	uint64_t max_time() const;
 
-	char* get_value_at(handle_t handle, uint64_t time) const;
+	char* get_value_at(const NodeVar & var, uint64_t time) const;
 
 	template<class T>
 	std::vector<T> read_values(const NodeVar & var) const;

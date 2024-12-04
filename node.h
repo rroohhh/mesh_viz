@@ -16,6 +16,8 @@ struct Highlights;
 
 #include "fst_file.h"
 
+using NodeID = handle_t;
+
 // node vars should know which Node they belong to, because we want to support multiple fstfiles per
 // trace (ie up to one per node to avoid inter thread sync)
 struct NodeVar
@@ -42,13 +44,16 @@ struct NodeVar
 
 	std::string pretty_name() const;
 
+	// this returns a stable ID which always refers to the same variable,
+	// but not necessarily to the same state (different formatter, etc)
+	NodeID stable_id() const;
 private:
 	using handle_t = ::handle_t;
 	handle_t handle;
-	friend Node;
+	// friend Node;
 	friend FstFile;
-	friend WaveformViewer;
-	friend Highlights;
+	// friend WaveformViewer;
+	// friend Highlights;
 };
 
 template <>

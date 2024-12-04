@@ -132,7 +132,7 @@ std::span<char> FixedFormatter::format(char* signal) const
 		std::visit([&](auto chunk) { visit_chunk(chunk, s); }, chunk);
 	}
 	size_t pos = 0;
-	cache_cleaned.assign(" ", cache.size());
+	cache_cleaned.assign(cache.size(), ' ');
 	for (auto& c : cache) {
 		if (c != '\x08') {
 			cache_cleaned[pos++] = c;

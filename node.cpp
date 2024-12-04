@@ -100,7 +100,7 @@ char* Node::get_current_var_value(const NodeVar& var)
 
 char* Node::value_at_time(const NodeVar& var, simtime_t time)
 {
-	return ctx->get_value_at(var.handle, time);
+	return ctx->get_value_at(var, time);
 }
 
 void Node::add_var_to_viewer(const NodeVar& var)
@@ -143,4 +143,8 @@ NodeVar::NodeVar(
 std::string NodeVar::pretty_name() const
 {
 	return std::format("[{},{}] {}", owner_node->x, owner_node->y, name);
+}
+
+NodeID NodeVar::stable_id() const {
+	return handle;
 }

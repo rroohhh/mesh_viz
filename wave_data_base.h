@@ -58,6 +58,26 @@ struct std::formatter<WaveValue, char>
 	}
 };
 
+template <>
+struct std::formatter<std::optional<WaveValue>, char>
+{
+	constexpr auto parse(std::format_parse_context& ctx)
+	{
+		return ctx.begin();
+	}
+
+	auto format(const auto& s, auto& ctx) const
+	{
+		if (s) {
+			return std::format_to(
+				ctx.out(), "Some({})", *s);
+		} else {
+			return std::format_to(
+				ctx.out(), "None");
+		}
+	}
+};
+
 namespace impl {
 template <bool BINARY_SEARCH = 0>
 struct UncompressedWaveDatabase
@@ -78,6 +98,8 @@ struct UncompressedWaveDatabase
 
 	std::optional<WaveValue> previous_value();
 
+	std::optional<WaveValue> value();
+
 	void rewind();
 
 	WaveValue last();
@@ -87,7 +109,9 @@ struct UncompressedWaveDatabase
 
 struct EliasFanoWaveDatabase
 {
-	using EncoderT = folly::compression::EliasFanoEncoder<uint32_t, uint32_t, 16, 0, false>;
+	// TODO(robin): with skip pointers it seems buggy
+	// (-> with 16, 0, previous of idx 1 was invalid)
+	using EncoderT = folly::compression::EliasFanoEncoder<uint32_t, uint32_t, 0, 0, false>;
 	using ReaderT = folly::compression::
 	    EliasFanoReader<EncoderT, folly::compression::instructions::Default, true, uint32_t>;
 
@@ -109,6 +133,8 @@ struct EliasFanoWaveDatabase
 	std::optional<WaveValue> jump_to(WaveValue to_find);
 
 	std::optional<WaveValue> previous_value();
+
+	std::optional<WaveValue> value();
 
 	void rewind();
 
@@ -138,6 +164,8 @@ struct BenchmarkingDatabase
 	std::optional<WaveValue> jump_to(WaveValue to_find);
 
 	std::optional<WaveValue> previous_value();
+
+	std::optional<WaveValue> value();
 
 	void rewind();
 

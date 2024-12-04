@@ -3,13 +3,13 @@
 #include "node.h"
 #include <print>
 
-char* FstFile::get_value_at(handle_t handle, uint64_t time) const
+char* FstFile::get_value_at(const NodeVar & var, uint64_t time) const
 {
 	// TODO(robin): very crude check for unitited buffer
 	if (value_buffer.size() == 0) {
 		return nullptr;
 	} else {
-		return fstReaderGetValueFromHandleAtTime(reader, time, handle, value_buffer.data());
+		return fstReaderGetValueFromHandleAtTime(reader, time, var.handle, value_buffer.data());
 	}
 }
 

@@ -13,7 +13,8 @@ set_target_properties(gflags_shared PROPERTIES
 
 set (CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
-set (EXECUTABLE_OPT_FILES imgui/imgui.cpp imgui/imgui_demo.cpp  imgui/imgui_widgets.cpp imgui/imgui_draw.cpp imgui/imgui_tables.cpp imgui/backends/imgui_impl_glfw.cpp imgui/backends/imgui_impl_opengl3.cpp pybind_imgui.cpp formatter.cpp waveform_viewer.cpp node.cpp bind.cpp nodes_panel.cpp core.cpp fst_file.cpp wave_data_base.cpp implot/implot.cpp implot/implot_items.cpp histogram.cpp inverted_index.cpp ../toplevel/mesh_utils.cpp)
+#TODO(robin): make asan clean
+set (EXECUTABLE_OPT_FILES imgui/imgui.cpp imgui/imgui_demo.cpp  imgui/imgui_widgets.cpp imgui/imgui_draw.cpp imgui/imgui_tables.cpp imgui/backends/imgui_impl_glfw.cpp imgui/backends/imgui_impl_opengl3.cpp pybind_imgui.cpp formatter.cpp waveform_viewer.cpp node.cpp bind.cpp nodes_panel.cpp core.cpp fst_file.cpp wave_data_base.cpp implot/implot.cpp implot/implot_items.cpp histogram.cpp inverted_index.cpp ../toplevel/mesh_utils.cpp highlights.cpp)
 set (EXECUTABLE_FILES main.cpp fonts.s ${EXECUTABLE_OPT_FILES})
 set_source_files_properties(fonts.s OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/NotoSans[wdth,wght].ttf;${CMAKE_SOURCE_DIR}/fontawesome-webfont.ttf"
 )
@@ -34,7 +35,7 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=lld")
 set(IMPLOT_OPTIONS "-DIMPLOT_CUSTOM_NUMERIC_TYPES=(signed char)(unsigned char)(signed short)(unsigned short)(signed int)(unsigned int)(signed long)(unsigned long)(signed long long)(unsigned long long)(float)(double)(long double)")
 
 target_compile_options(mesh_viz
-  PRIVATE $<$<COMPILE_LANGUAGE:CXX>: -std=c++23 -ggdb -march=native -mtune=native -fdiagnostics-color=always -Wall -Wextra ${IMPLOT_OPTIONS}>
+  PRIVATE $<$<COMPILE_LANGUAGE:CXX>: -std=c++23 -Og -ggdb -march=native -mtune=native -fdiagnostics-color=always -Wall -Wextra ${IMPLOT_OPTIONS}>
 )
 
 target_compile_options(mesh_viz
@@ -46,6 +47,9 @@ target_link_libraries(mesh_viz PRIVATE pybind11::embed glfw z GL ${Boost_LIBRARI
 # include CMAKE_SOURCE_DIR for fonts.s to find the font files
 target_include_directories(mesh_viz PRIVATE ${CMAKE_SOURCE_DIR} imgui imgui/backends implot ../toplevel ${Boost_INCLUDE_DIRS} ${FOLLY_INCLUDE_DIRS})
 
+
+# target_compile_options(mesh_viz PRIVATE -fsanitize=address)
+target_link_options(mesh_viz PRIVATE -fsanitize=address)
 
 add_executable(bench_db bench_db.cpp)
 target_sources(bench_db PRIVATE wave_data_base.cpp)
