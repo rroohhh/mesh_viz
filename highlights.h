@@ -1,6 +1,10 @@
-#include <vector>
+#pragma once
+
 #include "wave_data_base.h"
-#include "node.h"
+#include "node_var.h"
+
+#include <vector>
+#include <unordered_map>
 
 struct HighlightEntries {
   uint32_t color;
@@ -15,7 +19,7 @@ public:
 	Highlight(const decltype(highlights)& highlights);
 
 	// returns true if a highlighted value for var lies in [start, end) plus the highlight color
-	std::pair<bool, uint32_t> should_highlight(simtime_t start, simtime_t end);
+	std::tuple<bool, simtime_t, simtime_t> should_highlight(simtime_t start, simtime_t end);
 };
 
 struct Highlights {

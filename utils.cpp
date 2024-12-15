@@ -1,3 +1,6 @@
+#include<future>
+#include<format>
+
 template <>
 struct std::formatter<ImVec2, char>
 {
@@ -57,4 +60,11 @@ inline auto max(auto a, auto b)
 inline auto clip(auto a, auto min, auto max)
 {
 	return ::min(::max(a, min), max);
+}
+
+template<class T>
+inline std::future<T> resolved_future(T value) {
+	std::promise<T>	promise;
+	promise.set_value(value);
+	return promise.get_future();
 }

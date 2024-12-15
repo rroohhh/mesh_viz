@@ -6,6 +6,7 @@
 
 struct WaveformViewer;
 struct Histograms;
+struct AsyncRunner;
 
 struct NodesPanel
 {
@@ -13,10 +14,8 @@ struct NodesPanel
 	ImVec2 pos;
 	int grid_size = 10;
 	std::vector<std::shared_ptr<Node>> nodes;
-	WaveformViewer* viewer;
-	Histograms* histograms;
 
-	NodesPanel(std::vector<std::shared_ptr<Node>> nodes, WaveformViewer* viewer, Histograms* histograms);
+	NodesPanel(std::vector<std::shared_ptr<Node>> nodes);
 	void render(
 	    uint64_t current_time,
 	    const ImVec2& offset,

@@ -4,8 +4,8 @@
 #include "waveform_viewer.h"
 #include "histogram.h"
 
-NodesPanel::NodesPanel(std::vector<std::shared_ptr<Node>> nodes, WaveformViewer* viewer, Histograms* histograms) :
-    nodes(nodes), viewer(viewer), histograms(histograms)
+NodesPanel::NodesPanel(std::vector<std::shared_ptr<Node>> nodes) :
+    nodes(nodes)
 {
 }
 
@@ -51,7 +51,7 @@ void NodesPanel::render(
 	auto draw = ImGui::GetForegroundDrawList();
 	draw->PushClipRect(min, min + sz);
 	for (auto& node : nodes) {
-		node->render(current_time, offset + pos, zoom, process_func, viewer, histograms);
+		node->render(current_time, offset + pos, zoom, process_func);
 	}
 	draw->PopClipRect();
 }

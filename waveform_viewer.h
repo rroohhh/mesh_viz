@@ -1,7 +1,8 @@
 #pragma once
 
 #include "core.h"
-#include "fst_file.h"
+#include "node_var.h"
+#include "wave_data_base.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 
@@ -9,7 +10,11 @@
 #include <mutex>
 #include <unordered_map>
 #include <span>
+#include <string>
+#include <vector>
 
+struct FstFile;
+struct Highlights;
 
 struct Timeline
 {
@@ -18,7 +23,7 @@ struct Timeline
 
 	Timeline(FstFile* file);
 
-	auto render(float zoom, float offset, uint64_t cursor_value, ImRect bb);
+	auto render(double zoom, double offset, uint64_t cursor_value, ImRect bb);
 };
 
 const auto MIN_TEXT_SIZE = 20;
@@ -37,8 +42,8 @@ private:
 	FstFile* file;
 	Highlights * highlights;
 	Timeline timeline;
-	float zoom = 1.0;
-	float offset_f = 0.0;
+	double zoom = 1.0;
+	double offset_f = 0.0;
 	uint64_t cursor_value = 0;
 	float window_zoom_start = 0, window_zoom_end = 0;
 	bool did_window_zoom = false;

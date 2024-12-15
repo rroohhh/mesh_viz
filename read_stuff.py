@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import enum
 import json
+import numpy as np
 from math import pi as π, sin, cos
 
 import imgui
@@ -100,6 +101,17 @@ def process(n):
         # if imgui.selectable("show histogram", False)[0]:
         #     n.add_hist(mo_var, clk_var)
         imgui.end_popup()
+    imgui.same_line()
+    if imgui.button("++"):
+        async def lol(an):
+            to_send = var("packets_to_send")
+            sent = var("packets_sent")
+            ts_times, ts = await an.read_values(to_send, clk_var)
+            s_times, s = await an.read_values(sent, clk_var)
+            n.add_hist("outstanding packets", [to_send, sent], ts_times, ts - s)
+            print(ts_times, ts, s_times, s)
+
+        n.enqueue_task(lol)
 
 
     mid = min_pos + sz / 2

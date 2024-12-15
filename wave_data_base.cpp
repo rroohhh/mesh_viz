@@ -5,6 +5,7 @@
 #include <chrono>
 #include <execution>
 #include <print>
+#include <ranges>
 
 WaveValue WaveValue::unpack(uint32_t v)
 {
@@ -71,7 +72,15 @@ std::optional<WaveValue> UncompressedWaveDatabase<BINARY_SEARCH>::skip_to(WaveVa
 template <bool BINARY_SEARCH>
 std::optional<WaveValue> UncompressedWaveDatabase<BINARY_SEARCH>::jump_to(WaveValue to_find)
 {
-	internal_idx = 0;
+	auto encoded = to_find.timestamp << WaveValue::ValueTypeBits;
+	if (values[internal_idx] > encoded) {
+		auto diff =	values[internal_idx] - encoded;
+		if (internal_idx > diff) {
+			internal_idx = internal_idx - diff;
+		} else {
+			internal_idx = 0;
+		}
+	}
 	return skip_to(to_find);
 }
 
@@ -219,8 +228,8 @@ EliasFanoWaveDatabase::EliasFanoWaveDatabase(std::span<const WaveValue> values) 
 // template struct EliasFanoWaveDatabase<impl::EncoderT, impl::ReaderT>;
 
 template <class... DBS>
-BenchmarkingDatabase<DBS...>::BenchmarkingDatabase(std::span<const WaveValue> values) :
-    the_db(find_best_db(values))
+BenchmarkingDatabase<DBS...>::BenchmarkingDatabase(std::span<const WaveValue> values, bool jumpy) :
+    the_db(find_best_db(values, jumpy))
 {
 }
 
@@ -279,7 +288,7 @@ uint32_t BenchmarkingDatabase<DBS...>::size()
 }
 
 template <class... DBS>
-std::variant<DBS...> BenchmarkingDatabase<DBS...>::find_best_db(std::span<const WaveValue> values)
+std::variant<DBS...> BenchmarkingDatabase<DBS...>::find_best_db(std::span<const WaveValue> values, bool jumpy)
 {
 	std::tuple<DBS...> dbs{DBS{values}...};
 
@@ -289,7 +298,7 @@ std::variant<DBS...> BenchmarkingDatabase<DBS...>::find_best_db(std::span<const 
 	([&]<std::size_t... Is>(std::index_sequence<Is...>) {
 		(
 		    [&] {
-			    auto db = std::get<Is>(dbs);
+			    auto & db = std::get<Is>(dbs);
 			    auto start = std::chrono::high_resolution_clock::now();
 				// use values.size() as a rough proxy for how long the below loop will take and
 				// use that to estimate the number of rounds we need to get a good timing estimate
@@ -298,7 +307,7 @@ std::variant<DBS...> BenchmarkingDatabase<DBS...>::find_best_db(std::span<const 
 			    uint32_t checksum = 0;
 				uint32_t query_count = 0;
 			    for (size_t i = 0; i <= N; i++) {
-				    const auto& [check, ops] = work(db);
+				    const auto& [check, ops] = work(db, jumpy);
 				    checksum += check;
 					query_count += ops;
 			    }
@@ -307,7 +316,7 @@ std::variant<DBS...> BenchmarkingDatabase<DBS...>::find_best_db(std::span<const 
 
 			    double memory_usage_baseline = sizeof(WaveValue{}.pack()) * values.size();
 			    double memory_factor = ((double) db.memory_usage() / memory_usage_baseline);
-			    if (memory_usage_baseline < 1e6) {
+			    if (db.memory_usage() < 1e6) {
 				    // ignore memory usage if the usage is small
 				    memory_factor = 1.0f;
 			    }
@@ -334,7 +343,7 @@ std::variant<DBS...> BenchmarkingDatabase<DBS...>::find_best_db(std::span<const 
 }
 
 template <class DB>
-std::pair<uint32_t, uint32_t> work(DB& db)
+std::pair<uint32_t, uint32_t> work(DB& db, bool jumpy)
 {
 	db.rewind();
 	// 10M points, 2000 pixels -> about 2000 queries per pixel
@@ -344,7 +353,7 @@ std::pair<uint32_t, uint32_t> work(DB& db)
 	uint32_t sum = 0;
 	uint32_t ops = 0;
 	while (true) {
-		auto val = db.skip_to(WaveValue{time, (WaveValueType) 0});
+		auto val = jumpy ? db.jump_to(WaveValue{time, (WaveValueType) 0}) : db.skip_to(WaveValue{time, (WaveValueType) 0});
 		ops++;
 		auto previous = db.previous_value();
 		if (previous) {
@@ -364,13 +373,13 @@ std::pair<uint32_t, uint32_t> work(DB& db)
 
 template struct BenchmarkingDatabase<
     UncompressedWaveDatabase<true>,
-    UncompressedWaveDatabase<false>,
+    // UncompressedWaveDatabase<false>,
     EliasFanoWaveDatabase>;
 
-template std::pair<uint32_t, uint32_t> work<>(WaveDatabase& db);
-template std::pair<uint32_t, uint32_t> work<>(UncompressedWaveDatabase<false>& db);
-template std::pair<uint32_t, uint32_t> work<>(UncompressedWaveDatabase<true>& db);
-template std::pair<uint32_t, uint32_t> work<>(EliasFanoWaveDatabase& db);
+template std::pair<uint32_t, uint32_t> work<>(WaveDatabase& db, bool);
+template std::pair<uint32_t, uint32_t> work<>(UncompressedWaveDatabase<false>& db, bool);
+template std::pair<uint32_t, uint32_t> work<>(UncompressedWaveDatabase<true>& db, bool);
+template std::pair<uint32_t, uint32_t> work<>(EliasFanoWaveDatabase& db, bool);
 
 template struct impl::UncompressedWaveDatabase<true>;
 template struct impl::UncompressedWaveDatabase<false>;

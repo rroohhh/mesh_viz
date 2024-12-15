@@ -2,7 +2,6 @@
 
 #include <cinttypes>
 #include <format>
-#include <ranges>
 #include <vector>
 #include <folly/compression/elias_fano/EliasFanoCoding.h>
 
@@ -23,6 +22,8 @@ struct WaveValue
 
 	static constexpr auto ValueTypeBits =
 	    std::bit_width((uint32_t) WaveValueType::VALUE_TYPE_NUM_VALUES - 1);
+
+	auto operator<=>(const WaveValue & other) const = default;
 
 	uint32_t pack() const;
 
@@ -122,6 +123,15 @@ struct EliasFanoWaveDatabase
 	size_t bytes_size;
 
 	EliasFanoWaveDatabase(std::span<const WaveValue> values);
+	EliasFanoWaveDatabase & operator=(const EliasFanoWaveDatabase & other) {
+		data = other.data;
+		reader.~ReaderT();
+		new (&reader) ReaderT(data);
+		reader.jump(other.reader.position());
+		max = other.max;
+		bytes_size = other.bytes_size;
+		return *this;
+	}
 
 	WaveValue get(size_t idx);
 
@@ -152,7 +162,7 @@ struct BenchmarkingDatabase
 {
 	std::variant<DBS...> the_db;
 
-	BenchmarkingDatabase(std::span<const WaveValue> values);
+	BenchmarkingDatabase(std::span<const WaveValue> values, bool jumpy = false);
 
 	WaveValue get(size_t idx);
 
@@ -174,11 +184,11 @@ struct BenchmarkingDatabase
 	uint32_t size();
 
 private:
-	static std::variant<DBS...> find_best_db(std::span<const WaveValue> values);
+	static std::variant<DBS...> find_best_db(std::span<const WaveValue> values, bool jumpy);
 };
 
 template <class DB>
-std::pair<uint32_t, uint32_t> work(DB& db);
+std::pair<uint32_t, uint32_t> work(DB& db, bool);
 }
 
 
@@ -188,5 +198,5 @@ std::pair<uint32_t, uint32_t> work(DB& db);
 // http:// github.com/ot/succinct, and http://sux.di.unimi.it.
 using WaveDatabase = impl::BenchmarkingDatabase<
     impl::UncompressedWaveDatabase<true>,
-    impl::UncompressedWaveDatabase<false>,
+    // impl::UncompressedWaveDatabase<false>,
     impl::EliasFanoWaveDatabase>;

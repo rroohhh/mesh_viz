@@ -3,9 +3,10 @@
 #include <fstream>
 #include <map>
 #include <print>
+#include <ranges>
 
 template <class T>
-auto bench(const std::vector<WaveValue>& values)
+auto bench(const std::vector<WaveValue>& values, bool jumpy)
 {
 	T db(values);
 
@@ -16,14 +17,14 @@ auto bench(const std::vector<WaveValue>& values)
 	uint32_t query_count = 0;
 	// warmup
 	for (int i = 0; i <= N; i++) {
-		const auto& [check, ops] = impl::work(db);
+		const auto& [check, ops] = impl::work(db, jumpy);
 		checksum += check;
 		query_count += ops;
 	}
 	std::chrono::duration<double, std::nano> duration;
 	while (true) {
 		for (int i = 0; i <= N; i++) {
-			const auto& [check, ops] = impl::work(db);
+			const auto& [check, ops] = impl::work(db, jumpy);
 			checksum += check;
 			query_count += ops;
 		}
@@ -59,16 +60,19 @@ int main()
 	}
 
 
-	for (const auto& [fac, vals] : values) {
-		std::println("fac: {}", fac);
+	for (bool jumpy : {true, false}) {
+		std::println("jumpy {}", jumpy);
+		for (const auto& [fac, vals] : values) {
+			std::println("fac: {}", fac);
 
-		std::println("uncompressed binary search");
-		bench<impl::UncompressedWaveDatabase<true>>(vals);
-		std::println("uncompressed linear scan");
-		bench<impl::UncompressedWaveDatabase<false>>(vals);
-		std::println("elias fano");
-		bench<impl::EliasFanoWaveDatabase>(vals);
-		std::println("auto tune");
-		bench<WaveDatabase>(vals);
+			std::println("uncompressed binary search");
+			bench<impl::UncompressedWaveDatabase<true>>(vals, jumpy);
+			std::println("uncompressed linear scan");
+			bench<impl::UncompressedWaveDatabase<false>>(vals, jumpy);
+			std::println("elias fano");
+			bench<impl::EliasFanoWaveDatabase>(vals, jumpy);
+			std::println("auto tune");
+			bench<WaveDatabase>(vals, jumpy);
+		}
 	}
 }

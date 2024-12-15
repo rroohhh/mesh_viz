@@ -60,15 +60,18 @@ void Highlights::add(NodeID id, EntryT var_highlights)
 
 Highlight::Highlight(const decltype(highlights)& highlights) : highlights(highlights) {}
 
-std::pair<bool, uint32_t> Highlight::should_highlight(simtime_t start, simtime_t end)
+std::tuple<bool, simtime_t, simtime_t> Highlight::should_highlight(simtime_t start, simtime_t end)
 {
+	simtime_t min = std::numeric_limits<simtime_t>::max();
 	for (auto& batch : highlights) {
 		for (auto& highlight : batch->dbs) {
 			auto s = highlight->jump_to(WaveValue{.timestamp = start, .type = WaveValueType::Zero});
 			if (s and s->timestamp < end) {
-				return {true, batch->color};
+				return {true, batch->color, min};
+			} else {
+				min = min > s->timestamp ? s->timestamp : min;
 			}
 		}
 	}
-	return {false, 0};
+	return {false, 0, min};
 }

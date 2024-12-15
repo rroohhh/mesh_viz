@@ -2,9 +2,12 @@
 #include "IconsFontAwesome4.h"
 #include "imgui.h"
 #include "utils.cpp"
+#include "highlights.h"
+#include "fst_file.h"
+#include "node.h"
+
 #include <future>
 #include <print>
-#include "highlights.h"
 
 void DrawCenterText(auto& draw, const char* text, const ImVec2& pos)
 {
@@ -13,7 +16,7 @@ void DrawCenterText(auto& draw, const char* text, const ImVec2& pos)
 }
 
 void DrawVLine(
-    auto& draw, const ImVec2& min, const ImVec2& sz, float x, int col, float thickness = 1.0f)
+    auto& draw, const ImVec2& min, const ImVec2& sz, double x, int col, float thickness = 1.0f)
 {
 	draw->AddLine(min + ImVec2(x, 0), min + ImVec2(x, sz.y), col, thickness);
 }
@@ -42,7 +45,7 @@ auto clip_text_to_width(std::span<char> text, float pixels)
 	}
 }
 
-auto Timeline::render(float zoom, float offset, uint64_t cursor_value, ImRect bb)
+auto Timeline::render(double zoom, double offset, uint64_t cursor_value, ImRect bb)
 {
 	int64_t min_time = file->min_time();
 	int64_t max_time = file->max_time();
@@ -64,9 +67,9 @@ auto Timeline::render(float zoom, float offset, uint64_t cursor_value, ImRect bb
 
 	// Draw time grid
 	// want a marker every 10 pixels, so calculate how much every 10 pixels is
-	float b = 10;
-	float fine_width = b / zoom;
-	float human_base = 10;
+	double b = 10;
+	double fine_width = b / zoom;
+	double human_base = 10;
 	int64_t log_step = ceil(log(fine_width) / log(human_base));
 	int64_t fine_step = powf(human_base, log_step);
 	int64_t coarse_step = powf(human_base, log_step + 1);
@@ -95,7 +98,7 @@ auto Timeline::render(float zoom, float offset, uint64_t cursor_value, ImRect bb
 	}
 
 	// Draw cursor
-	float c_pos = ((float) cursor_value + offset) * zoom;
+	double c_pos = ((double) cursor_value + offset) * zoom;
 	if (c_pos > 0) {
 		DrawVLine(draw, min, sz, c_pos, CURSOR_COL, 2.0f);
 	}
@@ -176,7 +179,7 @@ uint64_t WaveformViewer::render()
 			did_window_zoom = false;
 		}
 		if (is_hovered and ImGui::IsKeyDown(ImGuiMod_Ctrl)) {
-			float old_zoom = zoom;
+			double old_zoom = zoom;
 			// TODO(robin): do this log style
 			if (io.MouseWheel > 0) {
 				zoom /= std::powf(1.1, io.MouseWheel);
@@ -224,7 +227,7 @@ uint64_t WaveformViewer::render()
 	if (ImGui::SmallButton(playing ? ICON_FA_PAUSE "###playing" : ICON_FA_PLAY "###playing")) {
 		playing = not playing;
 	}
-	if (cursor_value >= max_time) {
+	if (cursor_value >= (uint64_t) max_time) {
 		playing = false;
 	}
 	if (playing)
@@ -237,8 +240,7 @@ uint64_t WaveformViewer::render()
 	// draw one more to get the piece that is partially cut off
 	last_time += 1;
 
-	// TODO(robin): make this float
-	float offset = offset_f;
+	double offset = offset_f;
 
 	// waveform labels
 	{
@@ -350,7 +352,7 @@ void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const 
 	// we can miss the first value we search
 	db.jump_to(old_value);
 	time =
-	    max(ceil(round((old_value.timestamp + offset_f) * zoom + 0.5f) / zoom - offset_f),
+	    max((uint32_t) ceil(round((old_value.timestamp + offset_f) * zoom + 0.5l) / zoom - offset_f),
 	        old_value.timestamp + 1);
 
 	// std::println("time {}, v {} p {} o {}, this {}", time, current, previous, old_value, db.value());
@@ -364,7 +366,7 @@ void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const 
 		auto previous = (maybe_previous and maybe_value) ? *maybe_previous : db.last();
 
 		// if we dont have a new value, copy the last valid one
-		auto value = maybe_value ? *maybe_value : WaveValue{last_time, db.last().type};
+		auto value = maybe_value ? *maybe_value : WaveValue{(uint32_t) last_time, db.last().type};
 
 		// these get floored, because otherwise the not anti aliased rendering fucks up
 		// clip left edge
@@ -373,7 +375,7 @@ void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const 
 		bool new_screen_time_is_clipped = new_screen_time > size_x;
 		auto previous_screen_time = floor((previous.timestamp + offset_f) * zoom);
 
-		// std::println("v {} p {} o {}", value, previous, old_value);
+		// std::println("t {}, v {} p {} o {}", time, value, previous, old_value);
 
 		if (new_screen_time > 0) {
 			// add initial point
@@ -432,17 +434,20 @@ void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const 
 				}
 			}
 
-			auto hl_start_ts = old_value.timestamp;
+			// TODO(robin): move this loop outside of the waveform loop,
+			// it doesnt make sense to interleave these
+			auto hl_start_ts = max(old_value.timestamp, first_time - 1);
 			while (hl_start_ts < value.timestamp) {
-				auto hl_start_screen_time = floor((hl_start_ts + offset_f) * zoom);
+				auto hl_start_screen_time = floor(((double) hl_start_ts + offset_f) * zoom);
 				// ceil to next pixel
 				double next_pixel = round(hl_start_screen_time + 0.5f);
 				// ceil to next valid timestamp
 				auto next =
 					max(ceil(next_pixel / zoom - offset_f),
 						hl_start_ts + 1); // value.timestamp + ceil(per_pixel);
+				// std::println("hl_start_ts {}, next {}, old_value {}, value {}", hl_start_ts, next, old_value, value);
 
-				auto [should_hl, hl_color] = highlight.should_highlight(hl_start_ts, next);
+				auto [should_hl, hl_color, next_highlight] = highlight.should_highlight(hl_start_ts, next);
 
 				if (should_hl) {
 					// auto start = base + ImVec2(max(old_screen_time, 0), -1);
@@ -460,7 +465,7 @@ void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const 
 						highlight_colors.push_back(hl_color);
 					}
 				}
-				hl_start_ts = next;
+				hl_start_ts = max(next, next_highlight);
 			}
 		}
 

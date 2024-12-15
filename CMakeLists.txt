@@ -13,8 +13,7 @@ set_target_properties(gflags_shared PROPERTIES
 
 set (CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
-#TODO(robin): make asan clean
-set (EXECUTABLE_OPT_FILES imgui/imgui.cpp imgui/imgui_demo.cpp  imgui/imgui_widgets.cpp imgui/imgui_draw.cpp imgui/imgui_tables.cpp imgui/backends/imgui_impl_glfw.cpp imgui/backends/imgui_impl_opengl3.cpp pybind_imgui.cpp formatter.cpp waveform_viewer.cpp node.cpp bind.cpp nodes_panel.cpp core.cpp fst_file.cpp wave_data_base.cpp implot/implot.cpp implot/implot_items.cpp histogram.cpp inverted_index.cpp ../toplevel/mesh_utils.cpp highlights.cpp)
+set (EXECUTABLE_OPT_FILES imgui/imgui.cpp imgui/imgui_demo.cpp  imgui/imgui_widgets.cpp imgui/imgui_draw.cpp imgui/imgui_tables.cpp imgui/backends/imgui_impl_glfw.cpp imgui/backends/imgui_impl_opengl3.cpp pybind_imgui.cpp formatter.cpp waveform_viewer.cpp node.cpp bind.cpp nodes_panel.cpp core.cpp fst_file.cpp wave_data_base.cpp implot/implot.cpp implot/implot_items.cpp histogram.cpp inverted_index.cpp ../toplevel/mesh_utils.cpp highlights.cpp node_var.cpp fst_reader.cpp)
 set (EXECUTABLE_FILES main.cpp fonts.s ${EXECUTABLE_OPT_FILES})
 set_source_files_properties(fonts.s OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/NotoSans[wdth,wght].ttf;${CMAKE_SOURCE_DIR}/fontawesome-webfont.ttf"
 )
@@ -35,7 +34,7 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=lld")
 set(IMPLOT_OPTIONS "-DIMPLOT_CUSTOM_NUMERIC_TYPES=(signed char)(unsigned char)(signed short)(unsigned short)(signed int)(unsigned int)(signed long)(unsigned long)(signed long long)(unsigned long long)(float)(double)(long double)")
 
 target_compile_options(mesh_viz
-  PRIVATE $<$<COMPILE_LANGUAGE:CXX>: -std=c++23 -Og -ggdb -march=native -mtune=native -fdiagnostics-color=always -Wall -Wextra ${IMPLOT_OPTIONS}>
+  PRIVATE $<$<COMPILE_LANGUAGE:CXX>: -std=c++23 -O3 -fno-math-errno -ggdb -march=native -mtune=native -fdiagnostics-color=always -Wall -Wextra ${IMPLOT_OPTIONS} -fvisibility=hidden>
 )
 
 target_compile_options(mesh_viz
@@ -48,8 +47,11 @@ target_link_libraries(mesh_viz PRIVATE pybind11::embed glfw z GL ${Boost_LIBRARI
 target_include_directories(mesh_viz PRIVATE ${CMAKE_SOURCE_DIR} imgui imgui/backends implot ../toplevel ${Boost_INCLUDE_DIRS} ${FOLLY_INCLUDE_DIRS})
 
 
+target_compile_options(mesh_viz PRIVATE -fmax-errors=1)
+target_compile_options(mesh_viz PRIVATE -flto)
+target_link_options(mesh_viz PRIVATE -flto)
 # target_compile_options(mesh_viz PRIVATE -fsanitize=address)
-target_link_options(mesh_viz PRIVATE -fsanitize=address)
+# target_link_options(mesh_viz PRIVATE -fsanitize=address)
 
 add_executable(bench_db bench_db.cpp)
 target_sources(bench_db PRIVATE wave_data_base.cpp)
@@ -62,5 +64,5 @@ target_compile_options(bench_db PRIVATE $<$<COMPILE_LANGUAGE:CXX>: -std=c++23 -O
 
 
 # workaround clang++ somehow not finding this one correctly
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=lld -Wl,-rpath=/home/robin/.guix-home/profile/lib/")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold -Wl,-rpath=/home/robin/.guix-home/profile/lib/")
 target_link_libraries(bench_db PRIVATE Folly::folly /home/robin/.guix-home/profile/lib/libstdc++.so)
