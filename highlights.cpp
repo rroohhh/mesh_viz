@@ -66,10 +66,11 @@ std::tuple<bool, simtime_t, simtime_t> Highlight::should_highlight(simtime_t sta
 	for (auto& batch : highlights) {
 		for (auto& highlight : batch->dbs) {
 			auto s = highlight->jump_to(WaveValue{.timestamp = start, .type = WaveValueType::Zero});
+			if (s) {
+				min = min > s->timestamp ? s->timestamp : min;
+			}
 			if (s and s->timestamp < end) {
 				return {true, batch->color, min};
-			} else {
-				min = min > s->timestamp ? s->timestamp : min;
 			}
 		}
 	}

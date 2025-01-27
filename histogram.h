@@ -32,14 +32,14 @@ private:
 	std::unordered_map<NodeID, bool> to_highlight;
 
 	bool open = true;
-	using DataT = InvertedIndex<uint64_t>;
+	using DataT = InvertedIndex<uint32_t>;
 	std::future<DataT> data_future;
 	std::optional<DataT> data = std::nullopt;
 	std::optional<ImPlotRect> query = std::nullopt;
 	std::optional<std::shared_ptr<HighlightEntries>> highlighted = std::nullopt;
 	friend struct Histograms;
 
-	std::optional<WaveDatabase> small_wdb_opt;
+	std::unique_ptr<WaveDatabase> small_wdb_opt;
 
 	ImVec4 color = ImVec4(0.35, 0.16, 0.93, 0.5);
 
@@ -51,8 +51,8 @@ private:
 	void update_highlights();
 
 public:
-	Histogram(Highlights* highlights, FstFile* fstfile, const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge);
-	Histogram(Highlights* highlights, FstFile* fstfile, std::string name, std::vector<NodeVar> used, std::span<const DataT::simtime_t> times, std::span<const DataT::value_t> values);
+	Histogram(Highlights* highlights, std::shared_ptr<FstFile> fstfile, const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge);
+	Histogram(Highlights* highlights, std::shared_ptr<FstFile> fstfile, std::string name, std::vector<NodeVar> used, std::span<const DataT::simtime_t> times, std::span<const DataT::value_t> values);
 
 	bool render(int id);
 };
@@ -62,11 +62,11 @@ struct Histograms
 private:
 	std::vector<std::pair<Histogram, int>> histograms;
 	int id_gen = 0;
-	FstFile* fstfile;
+	std::shared_ptr<FstFile> fstfile;
 	Highlights* highlights;
 
 public:
-	Histograms(FstFile* fstfile, Highlights* highlights);
+	Histograms(std::shared_ptr<FstFile> fstfile, Highlights* highlights);
 
 	using DataT = Histogram::DataT;
 

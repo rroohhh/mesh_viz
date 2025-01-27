@@ -4,29 +4,20 @@
 #include <fstream>
 #include <numeric>
 #include <print>
+#include <varintdecode.h>
 
 using namespace impl;
 
 namespace impl {
-uint64_t read_varint(const byte_t*& data)
-{
-	uint64_t result = 0;
-
-	int i = 0;
-	do {
-		result |= ((uint64_t) ((*data) & 0b0111'1111)) << (7 * i++);
-	} while (*(data++) & 0b1000'0000);
-	return result;
-}
-
-
 struct FstMetadataReader
 {
 	std::ifstream file;
 
 	FstMetaData metadata;
 
-	FstMetadataReader(const char* path) : file(path) {};
+	FstMetadataReader(const char* path) : file(path) {
+		read_blocks();
+	};
 
 	FstVCBlockInfo read_dyn_alias2(FstBlock block)
 	{
@@ -80,11 +71,11 @@ struct FstMetadataReader
 		// std::println("wave data len: {}", wave_data_len);
 		file.seekg(position_data_pos);
 
-		std::vector<int32_t> positions(metadata.num_ids);
+		std::vector<int64_t> positions(metadata.num_ids);
 		std::vector<uint32_t> lengths(metadata.num_ids);
 
 		auto var_idx = 0;
-		auto bytes_offset = 0;
+		int64_t bytes_offset = 0;
 		auto previous_alias = 0;
 		auto previous_actual_var = 0;
 
@@ -241,7 +232,7 @@ struct FstMetadataReader
 		char date[26];
 		file.read(date, sizeof(date));
 		char dummy[3];
-		file.read(dummy, sizeof(date));
+		file.read(dummy, sizeof(dummy));
 		[[maybe_unused]]
 		auto filetype = read_scalar<uint8_t>();
 		// std::println("filetype {}", filetype);
@@ -321,12 +312,13 @@ std::vector<uint32_t> FstVCBlockInfo::read_time_table(const byte_t* data) const
 	std::vector<uint32_t> time(time_count);
 	with_maybe_uncompress(
 	    [&](const byte_t* data, auto) {
-		    auto last = 0;
-		    for (uint64_t i = 0; i < time_count; i++) {
-			    auto v = read_varint(data);
-			    last += v;
-			    time[i] = last;
-		    }
+			masked_vbyte_decode_delta(data, time.data(), time_count, 0);
+		    // auto last = 0;
+		    // for (uint64_t i = 0; i < time_count; i++) {
+			//     auto v = read_varint(data);
+			//     last += v;
+			//     time[i] = last;
+		    // }
 	    },
 	    data + time_data_pos, time_compressed_length, time_uncompressed_length);
 	return time;

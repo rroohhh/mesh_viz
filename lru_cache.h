@@ -35,6 +35,6 @@ public:
       }
       data.erase(to_remove);
     }
-    data.emplace(std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple(0, new_data));
+    data.emplace(std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple(0, std::move(new_data)));
   }
 };

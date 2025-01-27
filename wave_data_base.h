@@ -1,5 +1,6 @@
 #pragma once
 
+#include <print>
 #include <cinttypes>
 #include <format>
 #include <vector>
@@ -117,21 +118,23 @@ struct EliasFanoWaveDatabase
 	    EliasFanoReader<EncoderT, folly::compression::instructions::Default, true, uint32_t>;
 
 	// Value, SkipValue, forward quantum, skip quantum
-	EncoderT::CompressedList data;
+	std::optional<EncoderT::MutableCompressedList> data;
 	ReaderT reader;
 	uint32_t max;
 	size_t bytes_size;
 
-	EliasFanoWaveDatabase(std::span<const WaveValue> values);
-	EliasFanoWaveDatabase & operator=(const EliasFanoWaveDatabase & other) {
-		data = other.data;
-		reader.~ReaderT();
-		new (&reader) ReaderT(data);
-		reader.jump(other.reader.position());
-		max = other.max;
-		bytes_size = other.bytes_size;
-		return *this;
+	~EliasFanoWaveDatabase() {
+		if (data) {
+			data->free();
+		}
 	}
+
+	EliasFanoWaveDatabase(std::span<const WaveValue> values);
+	EliasFanoWaveDatabase(EliasFanoWaveDatabase&& other);
+	EliasFanoWaveDatabase & operator=(EliasFanoWaveDatabase && other);
+
+	EliasFanoWaveDatabase(const EliasFanoWaveDatabase& other) = delete;
+	EliasFanoWaveDatabase & operator=(EliasFanoWaveDatabase & other) = delete;
 
 	WaveValue get(size_t idx);
 
@@ -150,10 +153,10 @@ struct EliasFanoWaveDatabase
 
 	WaveValue last();
 
-	uint32_t size();
+	uint32_t size() const;
 
 private:
-	static EncoderT::CompressedList init_data(std::span<const WaveValue> values);
+	// static EncoderT::CompressedList init_data(std::span<const WaveValue> values);
 };
 
 // polymorphism was slower :(
@@ -163,6 +166,11 @@ struct BenchmarkingDatabase
 	std::variant<DBS...> the_db;
 
 	BenchmarkingDatabase(std::span<const WaveValue> values, bool jumpy = false);
+
+	BenchmarkingDatabase(const BenchmarkingDatabase &) = delete;
+	BenchmarkingDatabase & operator=(const BenchmarkingDatabase &) = delete;
+	BenchmarkingDatabase(BenchmarkingDatabase &&) = default;
+	BenchmarkingDatabase & operator=(BenchmarkingDatabase &&) = default;
 
 	WaveValue get(size_t idx);
 

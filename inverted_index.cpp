@@ -37,4 +37,4 @@ std::vector<T> get_keys(const std::unordered_map<T, WaveDatabase> & posting_list
 template<class T>
 InvertedIndex<T>::InvertedIndex(std::span<const T> values, std::span<const InvertedIndex::simtime_t> times) : posting_list(gen_posting_list(values, times)), keys(get_keys(posting_list)) {}
 
-template struct InvertedIndex<uint64_t>;
+template struct InvertedIndex<uint32_t>;

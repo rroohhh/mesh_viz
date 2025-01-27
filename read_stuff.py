@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import enum
-import json
+import re
 import numpy as np
 from math import pi as π, sin, cos
 
@@ -64,7 +64,22 @@ def process(n):
     def dump(d):
         # print("hello", d.name)
         for name, subscope in d.subscopes.items():
-            if imgui.tree_node(name):
+            name = re.sub(r"(?<=genblk_ports\[)(\d)(?=\])", lambda m: Dir(int(m.group(1))).name, name)
+            # if m := re.search(r"genblk_ports[(\d)]", name):
+            #     name =
+            open = imgui.tree_node(name)
+            if imgui.begin_popup_context_item():
+                if imgui.selectable("add to viewer", False)[0]:
+                    for v in subscope.variables.values():
+                        n.add_var_to_viewer(v)
+                if imgui.selectable("show histogram", False)[0]:
+                    for v in subscope.variables.values():
+                        n.add_hist(v, clk_var, [], [], True)
+                if imgui.selectable("show histogram (out stream)", False)[0]:
+                    for v in subscope.variables.values():
+                        n.add_hist(v, clk_var, [out_valid_var, out_ready_var], [], True)
+                imgui.end_popup()
+            if open:
                 dump(subscope)
                 imgui.tree_pop()
         for name, v in d.variables.items():
@@ -74,6 +89,8 @@ def process(n):
                 if imgui.selectable("add to viewer", False)[0]:
                     n.add_var_to_viewer(v)
                 if imgui.selectable("show histogram", False)[0]:
+                    n.add_hist(v, clk_var, [], [], True)
+                if imgui.selectable("show histogram (out stream)", False)[0]:
                     n.add_hist(v, clk_var, [out_valid_var, out_ready_var], [], True)
                 imgui.end_popup()
 
@@ -103,15 +120,20 @@ def process(n):
         imgui.end_popup()
     imgui.same_line()
     if imgui.button("++"):
+        to_send = var("packets_to_send")
+        sent = var("packets_sent")
+
         async def lol(an):
-            to_send = var("packets_to_send")
-            sent = var("packets_sent")
             ts_times, ts = await an.read_values(to_send, clk_var)
             s_times, s = await an.read_values(sent, clk_var)
             n.add_hist("outstanding packets", [to_send, sent], ts_times, ts - s)
             print(ts_times, ts, s_times, s)
 
-        n.enqueue_task(lol)
+        if imgui.is_key_down(imgui.Key.mod_ctrl):
+            n.add_var_to_viewer(to_send)
+            n.add_var_to_viewer(sent)
+        else:
+            n.enqueue_task(lol)
 
 
     mid = min_pos + sz / 2
@@ -130,10 +152,10 @@ def process(n):
         # print(d.t((-sz_r.x, sz.y - sz_r.y), (0.0, 0.0)))
         # print(d.t((0.0, sz.y), (0.0, 0.0)))
 
-        mo_var = var(f'genblk1[{d.value}].arq.wrapped.master_ins.outstanding')
+        mo_var = var(f'genblk_ports[{d.value}].arq.wrapped.master_ins.outstanding')
         mo_cap = mo_var.attrs["capacity"]
         mo = val(mo_var)
-        to_var = var(f'genblk1[{d.value}].arq.wrapped.target_ins.outstanding')
+        to_var = var(f'genblk_ports[{d.value}].arq.wrapped.target_ins.outstanding')
         to_cap = to_var.attrs["capacity"]
         to = val(to_var)
 
@@ -156,6 +178,7 @@ def process(n):
             if imgui.selectable("add to viewer", False)[0]:
                 n.add_var_to_viewer(mo_var)
             if imgui.selectable("show histogram", False)[0]:
+                print(n.read_values(mo_var, clk_var))
                 n.add_hist(mo_var, clk_var, [], [], True)
             imgui.end_popup()
         text_center_in(str(mo), master_min, master_max)
@@ -223,6 +246,27 @@ def process(n):
                     if d == Dir.SOUTH:
                         draw_fg.add_text(handle - t_sz * (1.0, 1.0) - sz_r * (1.0, 0.0), 0xffffffff, pretty)
 
+            data_sent_var = var(f"{d.name.lower()}.data_sent")
+            data_sent = n.get_current_var_value(data_sent_var)
+            event_sent_var = var(f"{d.name.lower()}.event_sent")
+            event_sent = n.get_current_var_value(event_sent_var)
+            mux_count = len(data_sent)
+
+            size = (sz.x - sz_r.x - mux_count) / mux_count
+            h = sz_r.y / 8
+            for i in range(mux_count):
+                target_min = d.t((-sz_r.x - i * size - 4.0, sz.y - h), (0.0, 0.0))
+
+
+                target_max = d.t((-sz_r.x- (i + 1) * size, sz.y - 3.0), (0.0, 0.0))
+                col = 0xff_88_88_88
+                if event_sent[i] == '1':
+                    col = 0xff00ff00
+                if data_sent[i] == '1':
+                    col = 0xff0000ff
+                draw.add_rect_filled(mid + target_min, mid + target_max, col)
+            # print(data_sent, event_sent)
+
 
 def bit_count(arr):
      # Make the values type-agnostic (as long as it's integers)
@@ -246,7 +290,9 @@ def __main__(nodes):
     out_valid_var = n0.data.variables["out_valid"]
     out_ready_var = n0.data.variables["out_ready"]
     clk_var = n0.data.variables["clk"]
+
     received = n0.read_values(n0.data.variables["flits_received"], clk_var, [out_valid_var, out_ready_var], [], True)[1][-1]
+
     max_latency = np.max(n0.read_values(n0.data.variables["flit_latency"], clk_var, [out_valid_var, out_ready_var], [], True)[1])
 
     sent = 0
@@ -262,8 +308,10 @@ def __main__(nodes):
             max_outstanding = max(np.max(p_to_send - p_sent), max_outstanding)
 
     sc = nodes[0].system_config
+    print(sc.error_params.direction)
     print(sc.height, sc.width, sc.link_delay, sc.node_params.packet_len, sc.node_params.p, sc.event_params.e, received, sent, max_latency, max_outstanding)
-    for node in nodes:
+    for node in sorted(nodes, key = lambda n: n.y):
+    # for node in nodes:
         clk = node.data.variables["clk"]
         for d in Dir:
             if (name := d.name.lower()) in node.data.subscopes:
@@ -275,8 +323,8 @@ def __main__(nodes):
                 # print(ev_time)
                 # print(d_data)
                 # print(d_time)
-                ev_count = bit_count(ev_data.astype(np.int))
-                d_count = bit_count(d_data.astype(np.int))
+                ev_count = bit_count(ev_data.astype(int))
+                d_count = bit_count(d_data.astype(int))
                 left_over = np.full_like(ev_count, MUX_COUNT) - ev_count
                 print(node.x, node.y, d.name.lower(), np.sum(d_count), np.sum(left_over), np.sum(ev_count))
     # print(nodes)

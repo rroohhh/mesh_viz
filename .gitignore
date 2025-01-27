@@ -14,3 +14,8 @@ wdb_perf.csv
 perf.data
 perf.data.old
 *.svg
+
+.ipynb_checkpoints/
+Untitled.ipynb
+Untitled1.ipynb
+mesh_viz.so

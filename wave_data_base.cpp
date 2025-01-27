@@ -41,6 +41,10 @@ uint32_t UncompressedWaveDatabase<BINARY_SEARCH>::memory_usage()
 template <bool BINARY_SEARCH>
 std::optional<WaveValue> UncompressedWaveDatabase<BINARY_SEARCH>::skip_to(WaveValue to_find)
 {
+	if (values.size() == 0) {
+		return std::nullopt;
+	}
+
 	uint32_t fixed = to_find.timestamp << WaveValue::ValueTypeBits;
 
 	auto current = get(internal_idx);
@@ -72,6 +76,9 @@ std::optional<WaveValue> UncompressedWaveDatabase<BINARY_SEARCH>::skip_to(WaveVa
 template <bool BINARY_SEARCH>
 std::optional<WaveValue> UncompressedWaveDatabase<BINARY_SEARCH>::jump_to(WaveValue to_find)
 {
+	if (values.size() == 0) {
+		return std::nullopt;
+	}
 	auto encoded = to_find.timestamp << WaveValue::ValueTypeBits;
 	if (values[internal_idx] > encoded) {
 		auto diff =	values[internal_idx] - encoded;
@@ -118,16 +125,6 @@ uint32_t UncompressedWaveDatabase<BINARY_SEARCH>::size() {
 
 // template struct UncompressedWaveDatabase<false>;
 // template struct UncompressedWaveDatabase<true>;
-
-auto EliasFanoWaveDatabase::init_data(std::span<const WaveValue> values) -> EncoderT::CompressedList
-{
-	EncoderT encoder(values.size(), values.back().pack());
-	for (const auto& v : values) {
-		encoder.add(v.pack());
-	}
-	return encoder.finish();
-}
-
 void EliasFanoWaveDatabase::rewind()
 {
 	reader.reset();
@@ -138,7 +135,7 @@ WaveValue EliasFanoWaveDatabase::last()
 	return WaveValue::unpack(max);
 }
 
-uint32_t EliasFanoWaveDatabase::size()
+uint32_t EliasFanoWaveDatabase::size() const
 {
 	return reader.size();
 }
@@ -214,9 +211,19 @@ WaveValue EliasFanoWaveDatabase::get(size_t idx)
 	return WaveValue::unpack(reader.value());
 }
 
+auto init_data(std::span<const WaveValue> values) -> EliasFanoWaveDatabase::EncoderT::MutableCompressedList
+{
+	EliasFanoWaveDatabase::EncoderT encoder(values.size(), values.back().pack());
+	for (const auto& v : values) {
+		encoder.add(v.pack());
+	}
+	return encoder.finish();
+}
+
+
 EliasFanoWaveDatabase::EliasFanoWaveDatabase(std::span<const WaveValue> values) :
-    data(init_data(values)),
-    reader(data),
+    data{init_data(values)},
+    reader(*data),
     max(values.back().pack()),
     bytes_size(EncoderT::Layout::fromUpperBoundAndSize(values.size(), max).bytes())
 {
@@ -290,6 +297,7 @@ uint32_t BenchmarkingDatabase<DBS...>::size()
 template <class... DBS>
 std::variant<DBS...> BenchmarkingDatabase<DBS...>::find_best_db(std::span<const WaveValue> values, bool jumpy)
 {
+	assert(values.size() > 0);
 	std::tuple<DBS...> dbs{DBS{values}...};
 
 	double best_time;
@@ -329,17 +337,17 @@ std::variant<DBS...> BenchmarkingDatabase<DBS...>::find_best_db(std::span<const 
 				    best = Is;
 				    best_time = score;
 			    }
-				std::println(
-					"N: {}, check: {}, mem: {} MB, dur: {}ms, ops: {}, per query: {}ns", N, checksum,
-					db.memory_usage() / 1024.0f / 1024.0f, duration.count() / 1e6, query_count,
-					duration.count() / query_count);
+				// std::println(
+				// 	"N: {}, check: {}, mem: {} MB, dur: {}ms, ops: {}, per query: {}ns", N, checksum,
+				// 	db.memory_usage() / 1024.0f / 1024.0f, duration.count() / 1e6, query_count,
+				// 	duration.count() / query_count);
 		    }(),
 		    ...);
-		std::println("found best db: {}", best);
+		// std::println("found best db: {}", best);
 		void(((best == Is && (void(ret.emplace(std::move(std::get<Is>(dbs)))), 1)) || ...));
 	}(std::make_index_sequence<sizeof...(DBS)>{}));
 
-	return *ret;
+	return std::move(*ret);
 }
 
 template <class DB>
@@ -383,4 +391,22 @@ template std::pair<uint32_t, uint32_t> work<>(EliasFanoWaveDatabase& db, bool);
 
 template struct impl::UncompressedWaveDatabase<true>;
 template struct impl::UncompressedWaveDatabase<false>;
+
+// TODO(robin): is this legal? Have to init reader because it does not have a default init
+EliasFanoWaveDatabase::EliasFanoWaveDatabase(EliasFanoWaveDatabase&& other) : reader(*other.data)
+{
+	*this = std::move(other);
 }
+
+EliasFanoWaveDatabase & EliasFanoWaveDatabase::operator=(EliasFanoWaveDatabase && other) {
+	assert(other.data);
+	data.swap(other.data);
+	reader.~ReaderT();
+	new (&reader) ReaderT(*data);
+	reader.jump(other.reader.position());
+	max = other.max;
+	bytes_size = other.bytes_size;
+	return *this;
+}
+}
+

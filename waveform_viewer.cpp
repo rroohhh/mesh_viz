@@ -106,9 +106,9 @@ auto Timeline::render(double zoom, double offset, uint64_t cursor_value, ImRect 
 	return std::tuple{first_time, last_time};
 }
 
-Timeline::Timeline(FstFile* file) : file(file) {}
+Timeline::Timeline(std::shared_ptr<FstFile> file) : file(file) {}
 
-WaveformViewer::WaveformViewer(FstFile* file, Highlights * highlights) : file(file), highlights(highlights), timeline(file) {}
+WaveformViewer::WaveformViewer(std::shared_ptr<FstFile> file, Highlights * highlights) : file(file), highlights(highlights), timeline(file) {}
 
 // TODO(robin): add group hierarchies
 void WaveformViewer::add(const NodeVar& var, std::span<std::string> group_hier)
@@ -116,7 +116,7 @@ void WaveformViewer::add(const NodeVar& var, std::span<std::string> group_hier)
 	auto guard = std::lock_guard(mutex);
 	vars.push_back(var);
 	if (fac_dbs.find(var.stable_id()) == fac_dbs.end()) {
-		fac_dbs.emplace(var.stable_id(), file->read_wave_db(var));
+		fac_dbs.emplace(std::piecewise_construct, std::forward_as_tuple(var.stable_id()), std::forward_as_tuple(file->read_wave_db(var)));
 	}
 }
 
@@ -147,7 +147,7 @@ uint64_t WaveformViewer::render()
 
 		ImGuiIO& io = ImGui::GetIO();
 
-		ImRect waveform_bb = ImRect(min + ImVec2(label_width, timeline_height), min + sz);
+		const auto waveform_bb = ImRect(min + ImVec2(label_width, 0), min + sz);
 
 		const auto is_hovered = ImGui::IsItemHovered() or (waveform_bb.Contains(io.MousePos));
 		const auto is_active =
@@ -157,7 +157,12 @@ uint64_t WaveformViewer::render()
 		                     ImGui::IsMouseDown(ImGuiButtonFlags_MouseButtonMiddle)));
 
 		if (is_active && ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0)) {
-			offset_f += io.MouseDelta.x / zoom;
+			const auto origin = io.MousePos - ImGui::GetMouseDragDelta(ImGuiMouseButton_Right, 0);
+			// std::println("origin {}, mousepos {}, waveform_bb {} to {}", origin, io.MousePos, waveform_bb.Min, waveform_bb.Max);
+			if (waveform_bb.Contains(origin)) {
+				// std::println("dragging {}", offset_f, io.MouseDelta.x / zoom);
+				offset_f += io.MouseDelta.x / zoom;
+			}
 		}
 		if (is_active && ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 5.0)) {
 			auto delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Middle, 0);
@@ -433,40 +438,6 @@ void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const 
 					    base + ImVec2(new_screen_time, y_size * (1.0 - (int) value.type)));
 				}
 			}
-
-			// TODO(robin): move this loop outside of the waveform loop,
-			// it doesnt make sense to interleave these
-			auto hl_start_ts = max(old_value.timestamp, first_time - 1);
-			while (hl_start_ts < value.timestamp) {
-				auto hl_start_screen_time = floor(((double) hl_start_ts + offset_f) * zoom);
-				// ceil to next pixel
-				double next_pixel = round(hl_start_screen_time + 0.5f);
-				// ceil to next valid timestamp
-				auto next =
-					max(ceil(next_pixel / zoom - offset_f),
-						hl_start_ts + 1); // value.timestamp + ceil(per_pixel);
-				// std::println("hl_start_ts {}, next {}, old_value {}, value {}", hl_start_ts, next, old_value, value);
-
-				auto [should_hl, hl_color, next_highlight] = highlight.should_highlight(hl_start_ts, next);
-
-				if (should_hl) {
-					// auto start = base + ImVec2(max(old_screen_time, 0), -1);
-					// auto end = base + ImVec2(new_screen_time, y_size + 1);
-
-					auto hl_end_screen_time = floor((hl_start_ts + 1 + offset_f) * zoom);
-
-					auto start = base + ImVec2(max(hl_start_screen_time, 0), -1);
-					auto end = base + ImVec2(hl_end_screen_time, y_size + 1);
-					if (highlights_to_draw.size() > 0 and highlights_to_draw.back().x >= start.x) {
-						highlights_to_draw.back() = end;
-					} else {
-						highlights_to_draw.push_back(start);
-						highlights_to_draw.push_back(end);
-						highlight_colors.push_back(hl_color);
-					}
-				}
-				hl_start_ts = max(next, next_highlight);
-			}
 		}
 
 		auto text_space = (new_screen_time - max(0, previous_screen_time));
@@ -490,6 +461,43 @@ void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const 
 
 		// std::println("")
 		old_value = value;
+	}
+
+	// TODO(robin): move this loop outside of the waveform loop,
+	// it doesnt make sense to interleave these
+	auto hl_start_ts = first_time > 0 ? first_time - 1 : 0;
+	while (hl_start_ts < last_time) {
+		auto hl_start_screen_time = floor(((double) hl_start_ts + offset_f) * zoom);
+		// ceil to next pixel
+		double next_pixel = round(hl_start_screen_time + 0.5f);
+		// ceil to next valid timestamp
+		auto next =
+			max(ceil(next_pixel / zoom - offset_f),
+				hl_start_ts + 1); // value.timestamp + ceil(per_pixel);
+
+		auto [should_hl, hl_color, next_highlight] = highlight.should_highlight(hl_start_ts, next);
+
+		// std::println("hl_start_ts {}, next {}, should_hl {}, next_highlight {}", hl_start_ts, next, should_hl, next_highlight);
+
+		if (should_hl) {
+			// auto start = base + ImVec2(max(old_screen_time, 0), -1);
+			// auto end = base + ImVec2(new_screen_time, y_size + 1);
+
+			auto hl_end_screen_time = floor((hl_start_ts + 1 + offset_f) * zoom);
+
+			auto start = base + ImVec2(max(hl_start_screen_time, 0), -1);
+			auto end = base + ImVec2(hl_end_screen_time, y_size + 1);
+			if (highlights_to_draw.size() > 0 and highlights_to_draw.back().x >= start.x) {
+				highlights_to_draw.back() = end;
+			} else {
+				highlights_to_draw.push_back(start);
+				highlights_to_draw.push_back(end);
+				highlight_colors.push_back(hl_color);
+			}
+			hl_start_ts = next;
+		} else {
+			hl_start_ts = max(next, next_highlight);
+		}
 	}
 
 	draw->Flags &= ~ImDrawListFlags_AntiAliasedLines;

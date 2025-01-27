@@ -21,16 +21,16 @@ void Histograms::render()
 	        [](auto& hist_id) { return not std::get<0>(hist_id).open; });
 }
 
-Histogram::Histogram(Highlights* highlights, FstFile* fstfile, const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge) :
+Histogram::Histogram(Highlights* highlights, std::shared_ptr<FstFile> fstfile, const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge) :
     highlights(highlights), var(var), sampling_var(sampling_var), conditions(conditions), masks(masks), data_future{std::async(std::launch::async, [=] {
 	    FstFile my_fstfile(*fstfile);
-	    auto [times, data] = my_fstfile.read_values<uint64_t>(var, sampling_var, conditions, masks, negedge);
+	    auto [times, data] = my_fstfile.read_values<uint32_t>(var, sampling_var, conditions, masks, negedge);
 	    return DataT{data, times};
     })}
 {
 }
 
-Histogram::Histogram(Highlights* highlights, FstFile*, std::string name, std::vector<NodeVar> used, std::span<const DataT::simtime_t> times, std::span<const DataT::value_t> values) :
+Histogram::Histogram(Highlights* highlights, std::shared_ptr<FstFile>, std::string name, std::vector<NodeVar> used, std::span<const DataT::simtime_t> times, std::span<const DataT::value_t> values) :
     highlights(highlights), extra(used), extra_name(name), data_future{resolved_future(DataT{values, times})}
 {
 }
@@ -158,7 +158,7 @@ bool Histogram::render(int id)
 					auto it = data->posting_list.find(mouse.x);
 					if (it != data->posting_list.end()) {
 						ImGui::BeginTooltip();
-						ImGui::Text("Value: %lu", it->first);
+						ImGui::Text("Value: %u", it->first);
 						ImGui::Text("Count: %u", it->second.size());
 						ImGui::EndTooltip();
 					}
@@ -196,7 +196,7 @@ void Histogram::set_query(decltype(query) new_value)
 	}
 }
 
-Histograms::Histograms(FstFile* fstfile, Highlights* highlights) :
+Histograms::Histograms(std::shared_ptr<FstFile> fstfile, Highlights* highlights) :
     fstfile(fstfile), highlights(highlights)
 {
 }
@@ -220,9 +220,8 @@ void Histogram::update_query()
 		}
 	}
 	if (values.size() > 0) {
-		std::println("doing small wdb opt");
 		std::sort(values.begin(), values.end());
-		small_wdb_opt.emplace(values);
+		small_wdb_opt = std::make_unique<WaveDatabase>(values);
 		(*highlighted)->dbs.push_back(&*small_wdb_opt);
 	}
 }

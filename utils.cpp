@@ -63,8 +63,8 @@ inline auto clip(auto a, auto min, auto max)
 }
 
 template<class T>
-inline std::future<T> resolved_future(T value) {
+inline std::future<T> resolved_future(T && value) {
 	std::promise<T>	promise;
-	promise.set_value(value);
+	promise.set_value(std::move(value));
 	return promise.get_future();
 }

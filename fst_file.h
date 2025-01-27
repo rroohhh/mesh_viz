@@ -19,7 +19,7 @@ struct Histograms;
 struct AsyncRunner;
 struct Node;
 
-struct FstFile
+struct FstFile: public std::enable_shared_from_this<FstFile>
 {
 	using fstReader = void*;
 	fstReader reader;
@@ -28,8 +28,10 @@ struct FstFile
 	// how long this has to be by reading the nodes.
 	mutable std::vector<char> value_buffer;
 
+	// using bit_type_t = uint8_t;
+	using bit_type_t = uint8_t;
 	// TODO(robin): this is quite hacky
-	mutable LruCache<handle_t, std::vector<bool>> cache;
+	mutable LruCache<handle_t, std::valarray<bit_type_t>> cache;
 
 	FstReader fast_reader;
 
@@ -92,9 +94,14 @@ struct FstFile
 
 	char* get_value_at(const NodeVar & var, uint64_t time) const;
 
-	template<class T, int nbits = 0>
-	std::vector<T> read_values(const NodeVar & var) const;
+	template<class T, class O = std::vector<T>>
+	O read_values(const NodeVar & var) const;
+
 
 	template<class T>
 	std::pair<std::vector<simtime_t>, std::vector<T>> read_values(const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge = false) const;
+
+	private:
+	template<class T, class O = std::vector<T>, int nbits = 0>
+	O read_values_inner(const NodeVar & var) const;
 };

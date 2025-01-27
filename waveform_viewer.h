@@ -18,10 +18,10 @@ struct Highlights;
 
 struct Timeline
 {
-	FstFile* file;
+	std::shared_ptr<FstFile> file;
 	uint32_t first_time, last_time;
 
-	Timeline(FstFile* file);
+	Timeline(std::shared_ptr<FstFile> file);
 
 	auto render(double zoom, double offset, uint64_t cursor_value, ImRect bb);
 };
@@ -39,7 +39,7 @@ const auto MOUSE_WHEEL_DRAG_FACTOR = 10.0f;
 struct WaveformViewer
 {
 private:
-	FstFile* file;
+	std::shared_ptr<FstFile> file;
 	Highlights * highlights;
 	Timeline timeline;
 	double zoom = 1.0;
@@ -57,7 +57,7 @@ private:
 	std::unordered_map<NodeID, WaveDatabase> fac_dbs;
 
 public:
-	WaveformViewer(FstFile* file, Highlights * highlights);
+	WaveformViewer(std::shared_ptr<FstFile> file, Highlights * highlights);
 
 	uint64_t render();
 

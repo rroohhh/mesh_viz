@@ -1,9 +1,9 @@
 #pragma once
 
-#include <vector>
 #include <format>
 #include <memory>
 #include <utility>
+#include <vector>
 //
 #include <boost/interprocess/file_mapping.hpp>
 #include <boost/interprocess/mapped_region.hpp>
@@ -147,7 +147,7 @@ using GeometrySumT = std::vector<uint32_t>;
 
 struct FstVCBlockInfo
 {
-	std::vector<int32_t> wave_data_offset;
+	std::vector<int64_t> wave_data_offset;
 	std::vector<uint32_t> wave_data_compressed_length;
 	// std::vector<uint32_t> wave_data_uncompressed_length;
 
@@ -182,7 +182,7 @@ struct FstMetaData
 };
 
 namespace impl {
-	FstMetaData init_metadata(const char * path);
+FstMetaData init_metadata(const char* path);
 }
 
 // NOTE(robin): this assumes you will always write the files on a little endian system and therefore
@@ -198,53 +198,63 @@ class FstReader
 public:
 	FstReader(const char* path) :
 	    path(path),
-	    mapped_file(std::make_shared<bip::mapped_region>(bip::file_mapping(path, bip::read_only), bip::read_only)),
-		metadata(std::make_shared<FstMetaData>(impl::init_metadata(path)))
+	    mapped_file(std::make_shared<bip::mapped_region>(
+	        bip::file_mapping(path, bip::read_only), bip::read_only)),
+	    metadata(std::make_shared<FstMetaData>(impl::init_metadata(path)))
 	{
 	}
 
 	// TODO(robin): parallel version?
-	template <std::invocable<const struct FstBlockByBlock &> F>
+	template <std::invocable<const struct FstBlockByBlock&> F>
 	void block_by_block(F&& f) const;
 
-	template <std::invocable<uint32_t, const byte_t *, uint16_t> F>
-	void read_values(uint32_t facid, F && f) const;
+	template <std::invocable<uint32_t, const byte_t*, uint16_t> F>
+	void read_values(uint32_t facid, F&& f) const;
 
 private:
 	const byte_t* file_mmap() const;
 
 
-  friend struct FstBlockByBlock;
+	friend struct FstBlockByBlock;
 };
 
 class FstBlockByBlock
 {
-	std::vector<uint32_t> time_table;
-	FstVCBlockInfo& block;
-FstReader& reader;
+	const std::vector<uint32_t> & time_table;
+	const FstVCBlockInfo& block;
+	const FstReader& reader;
 
-  friend struct FstReader;
-  FstBlockByBlock(std::vector<uint32_t> time_table, FstVCBlockInfo & block, FstReader & reader) : time_table(time_table), block(block), reader(reader) {}
+	friend struct FstReader;
+	FstBlockByBlock(
+	    const std::vector<uint32_t> & time_table, const FstVCBlockInfo& block, const FstReader& reader) :
+	    time_table(time_table), block(block), reader(reader)
+	{
+	}
 
 public:
 	template <typename T>
 	std::pair<std::vector<uint32_t>, std::vector<T>> read_values(uint32_t facid) const;
 
-	template <std::invocable<uint32_t, const byte_t *, uint16_t> F>
-	void read_values(uint32_t facid, F && f) const;
+	template <std::invocable<uint32_t, const byte_t*, uint16_t> F>
+	void read_values(uint32_t facid, F&& f) const;
 };
 
 
 namespace impl {
-uint64_t read_varint(const byte_t*& data);
+inline uint64_t read_varint(const byte_t*& data)
+{
+	uint64_t result = 0;
+
+	int shift = 0;
+	do {
+		result |= ((uint64_t) ((*data) & 0b0111'1111)) << shift;
+		shift += 7;
+	} while (*(data++) & 0b1000'0000);
+	return result;
 }
 
-// struct FstDynAlias2 {
-//   // bits at start_time
-//   std::shared_ptr<const byte_t *> bits;
-//   uint64_t start_time;
-//   uint64_t end_time;
-// };
+
+}
 
 
 // stuff I want

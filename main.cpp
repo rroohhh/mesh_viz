@@ -70,11 +70,11 @@ int main(int ac, char ** av) {
 	auto imgui_module = py::module::import("imgui");
 
 	AsyncRunner async_runner;
-	FstFile f(filename.c_str());
+	auto f = std::make_shared<FstFile>(filename.c_str());
 	Highlights highlights;
-	WaveformViewer waveform_viewer(&f, &highlights);
-	Histograms histograms(&f, &highlights);
-	NodesPanel panel(f.read_nodes(&waveform_viewer, &histograms, &async_runner));
+	WaveformViewer waveform_viewer(f, &highlights);
+	Histograms histograms(f, &highlights);
+	NodesPanel panel(f->read_nodes(&waveform_viewer, &histograms, &async_runner));
 
 	auto process_func = module.attr("process");
 	if (run_script) {

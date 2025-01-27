@@ -42,7 +42,7 @@ std::vector<std::shared_ptr<Node>> FstFile::read_nodes(WaveformViewer * waveform
 	std::vector<std::string> hierarchy_stack;
 	decltype(Node::role) node_role;
 	decltype(Node::system_config) system_config;
-	auto node = std::make_shared<Node>(0, 0, NodeData{}, this, node_role, system_config, waveform_viewer, histograms, async_runner);
+	auto node = std::make_shared<Node>(0, 0, NodeData{}, shared_from_this(), node_role, system_config, waveform_viewer, histograms, async_runner);
 	NodeData* current_node_data;
 	uint32_t max_bits = 0;
 	std::shared_ptr<Formatter> formatter{new HexFormatter{}};
@@ -52,7 +52,7 @@ std::vector<std::shared_ptr<Node>> FstFile::read_nodes(WaveformViewer * waveform
 		// std::println("hier {}", (void *) hier);
 		switch (hier->htyp) {
 			case FST_HT_SCOPE: {
-				std::println("hier: {}", hier->u.scope.name);
+				// std::println("hier: {}", hier->u.scope.name);
 				if (in_node_scope) {
 					depth++;
 
@@ -91,7 +91,7 @@ std::vector<std::shared_ptr<Node>> FstFile::read_nodes(WaveformViewer * waveform
 			case FST_HT_VAR: {
 				if (in_node_scope) {
 					auto var = hier->u.var;
-					std::println("adding var {} handle {}", var.name, var.handle);
+					// std::println("adding var {} handle {}", var.name, var.handle);
 					// TODO(robin): add formatter for single bit enums
 					if (var.length == 1) {
 						formatter.reset(new BinaryFormatter{});
@@ -110,14 +110,17 @@ std::vector<std::shared_ptr<Node>> FstFile::read_nodes(WaveformViewer * waveform
 				auto attr = hier->u.attr;
 				if (attr.typ == FST_AT_MISC and attr.subtype == FST_MT_COMMENT) {
 					// std::println("found comment: {}", attr.name);
+					using SystemConfigT = decltype(Node::system_config);
 					auto parsed = parse_attr<
-					    ParamsWrap<TraceFPGABandwidthParams>,
-					    ParamsWrap<PoissonEventTrafficParams>>(attr.name);
+					    ParamsWrap<decltype(SystemConfigT::node_params)>,
+					    ParamsWrap<decltype(SystemConfigT::event_params)>,
+					    ParamsWrap<decltype(SystemConfigT::error_params)>
+						>(attr.name);
 					auto nodeattr = std::get_if<NodeAttr>(&parsed);
 					if (nodeattr) {
 						assert(not in_node_scope);
 						next_is_node = true;
-						node = std::make_shared<Node>(nodeattr->x, nodeattr->y, NodeData{}, this, node_role, system_config, waveform_viewer, histograms, async_runner);
+						node = std::make_shared<Node>(nodeattr->x, nodeattr->y, NodeData{}, shared_from_this(), node_role, system_config, waveform_viewer, histograms, async_runner);
 						current_node_data = &node->data;
 					}
 					auto signalattr = std::get_if<SignalAttr>(&parsed);
@@ -201,16 +204,48 @@ WaveDatabase FstFile::read_wave_db(NodeVar var) const
 // 	std::from_chars(start, end, result, 2);
 // }
 
-// template<>
-// void from_chars(const char * start, const char * end, bool & result) {
-// 	result = (start[0] == '1');
-// }
+// NOTE(robin): untested for idx > 1
+template<class T, uint16_t idx>
+T from_bytes(const byte_t* data) {
+	if constexpr(idx == 1) {
+		return *data;
+	} else {
+		return ((data[0]) << (8 * (idx - 1))) | from_bytes<T, idx - 1>(data + 1);
+	}
+}
 
 // TODO(robin): do caching? or multithreading?
-template <class T, int nbits>
-std::vector<T> FstFile::read_values(const NodeVar & var) const
+template <class T, class O>
+O FstFile::read_values(const NodeVar & var) const
 {
-	if constexpr (std::is_same<T, bool>()) {
+	auto bytes = (var.nbits + 7) / 8;
+	switch (bytes) {
+		case 1:
+			return read_values_inner<T, O, 1>(var);
+		case 2:
+			return read_values_inner<T, O, 2>(var);
+		case 3:
+			return read_values_inner<T, O, 3>(var);
+		case 4:
+			return read_values_inner<T, O, 4>(var);
+		case 5:
+			return read_values_inner<T, O, 5>(var);
+		case 6:
+			return read_values_inner<T, O, 6>(var);
+		case 7:
+			return read_values_inner<T, O, 7>(var);
+		case 8:
+			return read_values_inner<T, O, 8>(var);
+		default:
+			return read_values_inner<T, O>(var);
+	}
+}
+
+// TODO(robin): do caching? or multithreading?
+template <class T, class O, int nbytes>
+O FstFile::read_values_inner(const NodeVar & var) const
+{
+	if constexpr (std::is_same<T, bit_type_t>()) {
 		auto cached = cache.get(var.handle);
 		if (cached) {
 			// std::println("cache hit");
@@ -218,101 +253,107 @@ std::vector<T> FstFile::read_values(const NodeVar & var) const
 		}
 	}
 
-	std::vector<T> values;
-	values.reserve(max_time() - min_time() + 1);
-	uint64_t last_time = 0;
-	fast_reader.read_val(
-	    min_time(), max_time(), {var}, [&](uint64_t time, handle_t, const unsigned char* value) {
-		    // auto v = std::strtoull((const char*) value, nullptr, 2);
-		    T v;
-			if constexpr(nbits == 0) {
-				from_chars((const char*) value, (const char *) value + var.nbits, v);
+	O values(max_time() - min_time() + 1);
+	// std::println("values.size(): {}", values.size());
+	// values.reserve();
+	int64_t last_time = -1;
+	auto shift = (8 - (var.nbits % 8)) % 8;
+	fast_reader.read_values(
+	    var.handle - 1, [&](uint32_t time, const byte_t* data, uint16_t bytes) {
+		    T v{0};
+			if constexpr(nbytes == 0) {
+				for (int i = 0; i < bytes; i++) {
+					v <<= 8;
+					v |= (*data++);
+				}
+				v = v >> shift;
 			} else {
-				from_chars((const char*) value, (const char *) value + nbits, v);
+				v = from_bytes<T, nbytes>(data) >> shift;
 			}
-		    if (values.size() == 0) {
-			    values.push_back(v);
+		    if (last_time == -1) {
+			    values[time] = v;
 		    } else {
 			    // NOTE(robin): assumes no glitches
-			    // std::println("filling: {}, time")
-			    values.insert(values.end(), time - last_time - 1, values.back());
-			    values.push_back(v);
+
+
+				std::fill(std::execution::unseq, std::begin(values) + last_time + 1, std::begin(values) + time, values[last_time]);
+
+			    // values.insert(values.end(), time - last_time - 1, values.back());
+
+				values[time] = v;
+			    // values.push_back(v);
 		    }
 		    last_time = time;
 	    });
+
 	if (last_time < max_time()) {
-		values.insert(values.end(), max_time() - last_time - 1, values.back());
+		std::fill(std::execution::unseq, std::begin(values) + last_time + 1, std::begin(values) + max_time(), values[last_time]);
+		// values.insert(values.end(), max_time() - last_time - 1, values.back());
 	}
 
-	if constexpr (std::is_same<T, bool>()) {
+	if constexpr (std::is_same<T, bit_type_t>()) {
 		cache.add(var.handle, values);
 	}
 
-	return values;
+	return std::move(values);
 }
 
-
-// TODO(robin): this can be optimized a lot, but we probably dont care
 template <class T>
 std::pair<std::vector<simtime_t>, std::vector<T>> FstFile::read_values(const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge) const
 {
-	using bit_type = bool;
-	auto var_data = read_values<T>(var);
-	auto sampling_var_data = read_values<bit_type, 1>(sampling_var);
-	std::vector<std::vector<bit_type>> condition_data(conditions.size());
-	std::vector<std::vector<bit_type>> mask_data(masks.size());
+	auto var_data = read_values<T, std::valarray<T>>(var);
+	auto clk = read_values<bit_type_t, std::valarray<bit_type_t>>(sampling_var);
+
+	// std::vector<std::vector<bit_type_t>> condition_data(conditions.size());
+	// std::vector<std::vector<bit_type_t>> mask_data(masks.size());
+
+	std::valarray<bit_type_t> cond(true, var_data.size());
+	std::valarray<bit_type_t> mask(false, var_data.size());
+
 	for (size_t i = 0; i < conditions.size(); i++) {
-		condition_data[i] = read_values<bit_type, 1>(conditions[i]);
+		cond *= read_values<bit_type_t, std::valarray<bit_type_t>>(conditions[i]);
 	}
 	for (size_t i = 0; i < masks.size(); i++) {
-		mask_data[i] = read_values<bit_type, 1>(masks[i]);
+		mask |= read_values<bit_type_t, std::valarray<bit_type_t>>(masks[i]);
 	}
+	cond *= (1 - mask);
 
-	std::valarray<bit_type> tmp(false, var_data.size());
-	std::valarray<bit_type> mask(false, var_data.size());
-	for (const auto & m : mask_data) {
-		std::copy(std::execution::unseq, m.begin(), m.end(), std::begin(tmp));
-		mask |= tmp;
+	auto num_entries = var_data.size();
+	// std::valarray<bit_type_t> tmp2(false, var_data.size());
+
+	// std::copy(std::execution::unseq, sampling_var_data.begin(), sampling_var_data.end(), std::begin(tmp));
+	// std::copy(std::execution::unseq, sampling_var_data.begin(), sampling_var_data.end(), std::begin(tmp2));
+
+	clk[std::slice(1, num_entries - 1, 1)] &= (1 - clk)[std::slice(0, num_entries - 1, 1)];
+
+	if (negedge) {
+		cond &= 1 - clk;
+	} else {
+		cond &= clk;
 	}
+	cond[0] = 0;
 
-	std::valarray<bit_type> cond(true, var_data.size());
-	for (const auto & c : condition_data) {
-		std::copy(std::execution::unseq, c.begin(), c.end(), std::begin(tmp));
-		cond &= tmp;
-	}
+	uint64_t count = std::reduce(std::execution::unseq, std::begin(cond), std::end(cond), 0UL);
 
-
-	std::vector<simtime_t> times;
-	std::vector<uint64_t> values;
-
+	std::vector<simtime_t> times(count);
+	std::vector<T> values(count);
+	auto idx = 0;
 	for (simtime_t time = 1; time < var_data.size(); time++) {
-		// trigger on rising edge
-		if ((not negedge and (sampling_var_data[time - 1] == 0) and (sampling_var_data[time] != 0))
-			or (negedge and (sampling_var_data[time - 1] != 0) and (sampling_var_data[time] == 0)) ){
-
-			// auto masked	= false;
-			// for (auto & mask : mask_data) {
-			// 	masked |= mask[time] != 0;
-			// }
-			// auto cond	= true;
-			// for (auto & conds : condition_data) {
-			// 	cond &= conds[time] != 0;
-			// }
-
-			// if (not masked and cond) {
-			if (not mask[time] and cond[time]) {
-				times.push_back(time);
-				values.push_back(var_data[time]);
-			}
+		if (cond[time]) {
+			times[idx] = time;
+			values[idx] = var_data[time];
+			idx += 1;
 		}
 	}
 
-	return {times, values};
+	return std::make_pair(times, values);
 }
 
-template std::vector<uint64_t> FstFile::read_values(const NodeVar & var) const;
-template std::vector<uint8_t> FstFile::read_values(const NodeVar & var) const;
-template std::vector<uint8_t> FstFile::read_values<uint8_t, 1>(const NodeVar & var) const;
-template std::vector<bool> FstFile::read_values(const NodeVar & var) const;
-template std::vector<bool> FstFile::read_values<bool, 1>(const NodeVar & var) const;
-template std::pair<std::vector<simtime_t>, std::vector<uint64_t>> FstFile::read_values(const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge) const;
+template std::vector<uint32_t> FstFile::read_values<uint32_t>(const NodeVar & var) const;
+template std::valarray<uint32_t> FstFile::read_values<uint32_t>(const NodeVar & var) const;
+template std::valarray<FstFile::bit_type_t> FstFile::read_values<FstFile::bit_type_t>(const NodeVar & var) const;
+
+// template std::vector<bool> FstFile::read_values(const NodeVar & var) const;
+// template std::vector<bool> FstFile::read_values<bool, 1>(const NodeVar & var) const;
+template std::pair<std::vector<simtime_t>, std::vector<uint32_t>> FstFile::read_values(const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge) const;
+//

@@ -1,12 +1,14 @@
+#include <print>
+
 namespace impl {
 
 #include <zlib.h>
 
 template <typename F, bool takes_ownership = false>
-void with_maybe_uncompress(F&& f, const byte_t* data, uint64_t data_len, uint64_t uncompressed_len)
+void with_maybe_uncompress(F&& f, const byte_t* data, uint64_t data_len, uint64_t uncompressed_len, bool should_decompress_override = false)
 {
 	auto buf = data;
-	if (data_len != uncompressed_len) {
+	if ((data_len != uncompressed_len) or should_decompress_override) {
 		uLong uncompressed_len_own = uncompressed_len;
 		auto decompressed_buf = new byte_t[uncompressed_len_own];
 		auto ret = uncompress(decompressed_buf, &uncompressed_len_own, data, data_len);
@@ -28,15 +30,14 @@ template <std::invocable<const struct FstBlockByBlock&> F>
 void FstReader::block_by_block(F&& f) const
 {
 	for (auto& block : metadata->vcblocks) {
-		auto times = block.read_time_table(file_mmap());
-		f(FstBlockByBlock{times, block, *this});
+		f(FstBlockByBlock{block.read_time_table(file_mmap()), block, *this});
 	}
 }
 
 template <std::invocable<uint32_t, const byte_t *, uint16_t> F>
 void FstReader::read_values(uint32_t facid, F && f) const {
     block_by_block([&](auto const & block) {
-      block.read_values(facid, f);
+      block.read_values(facid, std::forward<F>(f));
     });
 }
 
@@ -57,9 +58,10 @@ void FstBlockByBlock::read_values(uint32_t facid, F&& f) const
 	auto uncompressed_len = impl::read_varint(data_offset);
 	auto read = data_offset - reader.file_mmap() - offset;
 	auto compressed_len = block.wave_data_compressed_length[facid] - read;
+	auto is_compressed = uncompressed_len > 0;
 
 	// if zero, its not actually compressed
-	uncompressed_len = uncompressed_len > 0 ? uncompressed_len : compressed_len;
+	uncompressed_len = is_compressed ? uncompressed_len : compressed_len;
 
 	impl::with_maybe_uncompress(
 	    [&](const byte_t* data, auto n) {
@@ -69,7 +71,8 @@ void FstBlockByBlock::read_values(uint32_t facid, F&& f) const
 			    read_block_multi_bit(time_table, data, n, (bits + 7) / 8, f);
 		    }
 	    },
-	    data_offset, compressed_len, uncompressed_len);
+	    data_offset, compressed_len, uncompressed_len, is_compressed);
+	// important: event if compressed_len == uncompressed_len, its compressed (wtf???)
 };
 
 template <typename T>
@@ -84,7 +87,7 @@ std::pair<std::vector<uint32_t>, std::vector<T>> FstBlockByBlock::read_values(ui
 		T value{0};
 		for (int i = 0; i < bytes; i++) {
 			value <<= 8;
-			value += (*data++);
+			value |= (*data++);
 		}
 		times[idx] = time;
 		vals[idx] = value;
@@ -99,14 +102,17 @@ std::pair<std::vector<uint32_t>, std::vector<T>> FstBlockByBlock::read_values(ui
 }
 
 template <class F>
-void read_block_single_bit(std::vector<uint32_t> time_table, const byte_t* data, size_t n, F&& f)
+void read_block_single_bit(const std::vector<uint32_t> & time_table, const byte_t* data, size_t n, F&& f)
 {
 	auto end = data + n;
 	auto time_idx = 0;
 	while (data < end) {
-		auto combined_value = impl::read_varint(data) >> 1;
+		auto var = impl::read_varint(data);
+		assert((var & 1) == 0);
+		auto combined_value = var >> 1;
 		auto time_idx_delta = combined_value >> 1;
-		byte_t value = combined_value & 0b1;
+		// shift to have same format as binary multibit
+		byte_t value = (combined_value & 0b1) << 7;
 		time_idx += time_idx_delta;
 
 		f(time_table[time_idx], &value, 1);
@@ -114,21 +120,14 @@ void read_block_single_bit(std::vector<uint32_t> time_table, const byte_t* data,
 }
 
 template <class F>
-void read_block_multi_bit(
-    std::vector<uint32_t> time_table, const byte_t* data, size_t n, size_t bytes, F&& f)
+void read_block_multi_bit(const
+    std::vector<uint32_t> & time_table, const byte_t* data, size_t n, size_t bytes, F&& f)
 {
 	auto end = data + n;
 	auto time_idx = 0;
 	while (data < end) {
 		auto time_idx_delta = impl::read_varint(data) >> 1;
 		time_idx += time_idx_delta;
-
-		// uint64_t value = 0;
-		// for (int i = 0; i < bytes; i++) {
-		// 	value << 8;
-		// 	value += (*data++);
-		// }
-
 		f(time_table[time_idx], data, bytes);
 		data += bytes;
 	}

@@ -1,9 +1,11 @@
 #include "async_runner.h"
+#include "highlights.h"
 #include "mesh_utils.h"
 #include "node.h"
 #include "node_var.h"
 #include "histogram.h"
 #include "fst_file.h"
+#include "waveform_viewer.h"
 
 #include <print>
 #include <pybind11/embed.h>
@@ -59,8 +61,16 @@ PYBIND11_MAKE_OPAQUE(std::map<std::string, NodeVar>)
 PYBIND11_MAKE_OPAQUE(std::map<std::string, NodeData>)
 PYBIND11_MAKE_OPAQUE(decltype(NodeVar::attrs))
 
-PYBIND11_EMBEDDED_MODULE(mesh_viz, m)
+MYPYBIND11_MODULE(mesh_viz, m)
 {
+	m.def("load", [](std::string filename) {
+		AsyncRunner async_runner;
+		auto f = std::make_shared<FstFile>(filename.c_str());
+		Highlights highlights;
+		WaveformViewer waveform_viewer(f, &highlights);
+		Histograms histograms(f, &highlights);
+		return f->read_nodes(&waveform_viewer, &histograms, &async_runner);
+	});
 	py::bind_vector<std::vector<std::shared_ptr<Node>>>(m, "NodeVector");
 	py::bind_map<std::map<std::string, NodeVar>>(m, "MapStringNodeVar");
 	py::bind_map<std::map<std::string, NodeData>>(m, "MapStringNodeData");
@@ -73,7 +83,8 @@ PYBIND11_EMBEDDED_MODULE(mesh_viz, m)
 	    .def_readonly("height", &SystemConfigT::height)
 	    .def_readonly("link_delay", &SystemConfigT::link_delay)
 	    .def_readonly("node_params", &SystemConfigT::node_params)
-	    .def_readonly("event_params", &SystemConfigT::event_params);
+	    .def_readonly("event_params", &SystemConfigT::event_params)
+	    .def_readonly("error_params", &SystemConfigT::error_params);
 
 	using NodeParamsT = decltype(SystemConfigT::node_params);
 	py::class_<NodeParamsT>(m, "NodeParams")
@@ -82,6 +93,22 @@ PYBIND11_EMBEDDED_MODULE(mesh_viz, m)
 
 	using EventParamsT = decltype(SystemConfigT::event_params);
 	py::class_<EventParamsT>(m, "EventParams").def_readonly("e", &EventParamsT::e);
+
+	using ErrorParamsT = decltype(SystemConfigT::error_params);
+	py::class_<ErrorParamsT>(m, "ErrorParams")
+		.def_readonly("first", &ErrorParamsT::first)
+		.def_readonly("interval", &ErrorParamsT::interval)
+		.def_readonly("x", &ErrorParamsT::x)
+		.def_readonly("y", &ErrorParamsT::y)
+		.def_readonly("direction", &ErrorParamsT::direction)
+		;
+
+	py::enum_<LinkDirection>(m, "LinkDirection")
+    .value("north", LinkDirection::North)
+    .value("south", LinkDirection::South)
+    .value("east", LinkDirection::East)
+    .value("west", LinkDirection::West)
+		;
 
 	py::class_<NodeRoleAttr>(m, "NodeRoleAttr").def_readonly("is_fpga", &NodeRoleAttr::is_fpga);
 
@@ -113,7 +140,7 @@ PYBIND11_EMBEDDED_MODULE(mesh_viz, m)
 	           std::vector<NodeVar> conditions = {}, std::vector<NodeVar> masks = {},
 	           bool negedge = false) {
 		        auto [a, b] =
-		            self.ctx->read_values<uint64_t>(var, sampling_var, conditions, masks, negedge);
+		            self.ctx->read_values<uint32_t>(var, sampling_var, conditions, masks, negedge);
 		        return std::make_pair(as_pyarray(std::move(a)), as_pyarray(std::move(b)));
 	        },
 	        py::arg(), py::arg(), "conditions"_a = std::vector<NodeVar>{},
@@ -131,13 +158,11 @@ PYBIND11_EMBEDDED_MODULE(mesh_viz, m)
 	           bool negedge = false) {
 		        return Awaitable::create(
 		            [=]() {
-			            auto res = self->ctx.read_values<uint64_t>(var, sampling_var, conditions, masks, negedge);
-						std::println("got res, its a pair {} {}", res.first[0], res.second[0]);
+			            auto res = self->ctx.read_values<uint32_t>(var, sampling_var, conditions, masks, negedge);
 						return res;
 		            },
 		            [](auto result) {
 			            auto && [a, b] = result;
-						std::println("casting, its still a pair {} {}", a[0], b[0]);
 			            return py::make_tuple(as_pyarray(std::move(a)), as_pyarray(std::move(b)));
 		            });
 	        },
@@ -193,7 +218,7 @@ void Node::add_hist(Args && ...args) {
 
 void py_init_module_imgui_main(py::module& m);
 
-PYBIND11_EMBEDDED_MODULE(imgui, m)
+MYPYBIND11_MODULE(imgui, m)
 {
 	py_init_module_imgui_main(m);
 }

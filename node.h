@@ -37,9 +37,9 @@ struct Node : public std::enable_shared_from_this<Node>
 
 	bool highlight = false;
 	NodeRoleAttr role;
-	SystemAttr<ParamsWrap<TraceFPGABandwidthParams>, ParamsWrap<PoissonEventTrafficParams>> system_config;
+	SystemAttr<ParamsWrap<TraceFPGABandwidthParams>, ParamsWrap<PoissonEventTrafficParams>, ParamsWrap<FixedErrorModelParams>> system_config;
 
-	Node(int x, int y, NodeData data, FstFile* ctx, NodeRoleAttr role, decltype(system_config) system_config, WaveformViewer* v, Histograms* hist, AsyncRunner * async_runner);
+	Node(int x, int y, NodeData data, std::shared_ptr<FstFile> ctx, NodeRoleAttr role, decltype(system_config) system_config, WaveformViewer* v, Histograms* hist, AsyncRunner * async_runner);
 
 	void render(
 	    uint64_t c_time,
@@ -60,7 +60,7 @@ struct Node : public std::enable_shared_from_this<Node>
 	void enqueue_task(std::function<pybind11::object(pybind11::object)>);
 
 	// TODO(robin): encapsulate this
-	FstFile* ctx;
+	std::shared_ptr<FstFile> ctx;
 private:
 	WaveformViewer* viewer;
 	Histograms* histograms;

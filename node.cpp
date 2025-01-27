@@ -92,7 +92,7 @@ Node::Node(
     int x,
     int y,
     NodeData data,
-    FstFile* ctx,
+    std::shared_ptr<FstFile> ctx,
     NodeRoleAttr role,
     decltype(system_config) system_config, WaveformViewer* viewer, Histograms* histograms, AsyncRunner * async_runner) :
     x(x), y(y), data(data), role(role), system_config(system_config), ctx(ctx), viewer(viewer), histograms(histograms), async_runner(async_runner)
