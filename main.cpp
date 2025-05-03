@@ -41,6 +41,9 @@ void signalHandler(int signum)
 	exit(signum);
 }
 
+
+float scale = 1;
+
 // Main code
 namespace po = boost::program_options;
 int main(int ac, char ** av) {
@@ -113,7 +116,7 @@ int main(int ac, char ** av) {
 
 	// Create window with graphics context
 	GLFWwindow* window =
-	    glfwCreateWindow(1280, 720, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
+	    glfwCreateWindow(1280, 720, "mesh viz", nullptr, nullptr);
 	if (window == nullptr)
 		return 1;
 	glfwMakeContextCurrent(window);
@@ -124,7 +127,7 @@ int main(int ac, char ** av) {
 	// std::println("xscale = {}, yscale = {}", xscale, yscale);
 	glfwSetWindowContentScaleCallback(window, [](GLFWwindow*, float xscale, float yscale) {
 		std::println("xscale = {}, yscale = {}", xscale, yscale);
-		DPI_SCALE = xscale;
+		DPI_SCALE = xscale / scale;
 	});
 
 	IMGUI_CHECKVERSION();
@@ -137,13 +140,14 @@ int main(int ac, char ** av) {
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	std::println("size: {} {}", noto_sans_ttf_size, fontawesome_ttf_size);
 	// io.Fonts->AddFontFromFileTTF("NotoSans[wdth,wght].ttf", 22);
-	io.Fonts->AddFontFromMemoryTTF(noto_sans_ttf, noto_sans_ttf_size, 22);
+	float fontsize = 22 * scale;
+	io.Fonts->AddFontFromMemoryTTF(noto_sans_ttf, noto_sans_ttf_size, fontsize);
 	static const ImWchar icons_ranges[] = {ICON_MIN_FA, ICON_MAX_FA, 0};
 	ImFontConfig icons_config;
 	icons_config.MergeMode = true;
 	icons_config.PixelSnapH = true;
 	// io.Fonts->AddFontFromFileTTF("fontawesome-webfont.ttf", 22.0f, &icons_config, icons_ranges);
-	io.Fonts->AddFontFromMemoryTTF(fontawesome_ttf, fontawesome_ttf_size, 22.0f, &icons_config, icons_ranges);
+	io.Fonts->AddFontFromMemoryTTF(fontawesome_ttf, fontawesome_ttf_size, fontsize, &icons_config, icons_ranges);
 
 	ImGui::StyleColorsDark();
 	auto & style = ImGui::GetStyle();
@@ -153,6 +157,14 @@ int main(int ac, char ** av) {
 	ImGui_ImplOpenGL3_Init(glsl_version);
 
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+
+	// ImFontConfig cfg;
+	// cfg.SizePixels = 13 * scale;
+	// scaled_font = ImGui::GetIO().Fonts->AddFontDefault(&cfg);
+	// ImGui::GetIO().Fonts->Build();
+	// ImGui_ImplOpenGL3_CreateFontsTexture();
+	// old_scale = scale;
+	ImGui::GetStyle().ScaleAllSizes(scale);
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
