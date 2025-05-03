@@ -99,7 +99,9 @@ std::vector<std::shared_ptr<Node>> FstFile::read_nodes(WaveformViewer * waveform
 					current_node_data->variables.insert(
 					    {{var.name},
 					     {var.name, var.length, var.handle, node, std::move(formatter),
-					      var_attrs}});
+					      std::move(var_attrs)}});
+					var_attrs.clear(); // we move the contents away, but call clear to
+									   // be in a defined state
 					formatter.reset(new HexFormatter{});
 					max_bits = max_bits > var.length ? max_bits : var.length;
 				}

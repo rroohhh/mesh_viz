@@ -147,7 +147,6 @@ def process(n):
 
     # formatting hack
     v = var(f"local_in__0__payload")
-    fmt = v.format
 
     for d in Dir:
         mo_var = var(f'{d.name.lower()}.arq_sender.outstanding')
