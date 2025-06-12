@@ -109,31 +109,6 @@ struct std::formatter<FstBlock, char>
 	}
 };
 
-template <typename T>
-struct std::formatter<std::vector<T>, char>
-{
-	constexpr auto parse(std::format_parse_context& ctx)
-	{
-		return ctx.begin();
-	}
-
-	auto format(const auto& s, auto& ctx) const
-	{
-		std::format_to(ctx.out(), "[");
-		bool first = true;
-		for (auto elem : s) {
-			if (first) {
-				std::format_to(ctx.out(), "{}", elem);
-
-			} else {
-				std::format_to(ctx.out(), ", {}", elem);
-			}
-			first = false;
-		}
-		return std::format_to(ctx.out(), "]");
-	}
-};
-
 struct FstHeader
 {
 	uint64_t start_time;

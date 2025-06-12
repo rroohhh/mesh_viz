@@ -11,11 +11,9 @@
 
 using handle_t = fstHandle;
 
-// using value_change_cb_t =
-//     std::function<void(uint64_t time, handle_t facidx, const unsigned char* value)>;
-
 struct WaveformViewer;
 struct Histograms;
+struct SignalFlowTraces;
 struct AsyncRunner;
 struct Node;
 
@@ -41,50 +39,12 @@ struct FstFile: public std::enable_shared_from_this<FstFile>
 
 	// TODO(robin): consider making this deleted to avoid implicit copies
 	// copies the context for use on another thread for example
+	// warning: base class ‘class std::enable_shared_from_this<FstFile>’ should be explicitly initialized in the copy constructor [-Wextra]
+	// 168 | FstFile::FstFile(const FstFile& other) :
+	//     | ^~~~~~~
 	FstFile(const FstFile & other);
 
-	std::vector<std::shared_ptr<Node>> read_nodes(WaveformViewer * waveform_viewer, Histograms * histograms, AsyncRunner * async_runner);
-
-	// template<class T>
-	// void read_changes(
-	//     uint64_t min_time,
-	//     uint64_t max_time,
-	//     const std::vector<NodeVar>& vars,
-	//     T cb) const {
-	// 	fstReaderClrFacProcessMaskAll(reader);
-	// 	for (const auto& var : vars) {
-	// 		fstReaderSetFacProcessMask(reader, var.handle);
-	// 	}
-	// 	fstReaderIterBlocksSetNativeDoublesOnCallback(reader, 1);
-	// 	fstReaderSetLimitTimeRange(reader, min_time, max_time);
-
-	// 	void (* value_change_callback)(
-	// 		void* user_callback_data_pointer,
-	// 		uint64_t time,
-	// 		handle_t facidx,
-	// 		const unsigned char* value) = [](void* user_callback_data_pointer,
-	// 		uint64_t time,
-	// 		handle_t facidx,
-	// 		const unsigned char* value) {
-	// 		(*((T *) user_callback_data_pointer))(time, facidx, value);
-	// 	};
-
-	// 	void (* value_change_callback2)(
-	// 		void* user_callback_data_pointer,
-	// 		uint64_t time,
-	// 		handle_t facidx,
-	// 		const unsigned char* value,
-	// 		uint32_t) = [] (void* user_callback_data_pointer,
-	// 		uint64_t time,
-	// 		handle_t facidx,
-	// 		const unsigned char* value,
-	// 		uint32_t) {
-	// 		(*((T *) user_callback_data_pointer))(time, facidx, value);
-	// 	};
-
-	// 	fstReaderIterBlocks2(
-	// 		reader, value_change_callback, value_change_callback2, &cb, nullptr);
-	// }
+	std::vector<std::shared_ptr<Node>> read_nodes(WaveformViewer * waveform_viewer, Histograms * histograms, SignalFlowTraces *signal_flow_traces, AsyncRunner * async_runner);
 
 	WaveDatabase read_wave_db(NodeVar var) const;
 

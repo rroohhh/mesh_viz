@@ -1,10 +1,11 @@
 #pragma once
 
 #include "core.h"
+#include "cursor.h"
 #include "node_var.h"
 #include "wave_data_base.h"
+#include "timeline.h"
 #include "imgui.h"
-#include "imgui_internal.h"
 
 #include <cstdint>
 #include <mutex>
@@ -16,25 +17,11 @@
 struct FstFile;
 struct Highlights;
 
-struct Timeline
-{
-	std::shared_ptr<FstFile> file;
-	uint32_t first_time, last_time;
-
-	Timeline(std::shared_ptr<FstFile> file);
-
-	auto render(double zoom, double offset, uint64_t cursor_value, ImRect bb);
-};
-
 const auto MIN_TEXT_SIZE = 20;
 const auto PADDING = 3;
 
-// returns the end of the text
-auto clip_text_to_width(std::span<char> text, float pixels);
-
 const auto FEATHER_SIZE = 4.0f;
 // const auto FEATHER_SIZE = 0.0f;
-const auto MOUSE_WHEEL_DRAG_FACTOR = 10.0f;
 
 struct WaveformViewer
 {
@@ -44,11 +31,12 @@ private:
 	Timeline timeline;
 	double zoom = 1.0;
 	double offset_f = 0.0;
-	uint64_t cursor_value = 0;
-	float window_zoom_start = 0, window_zoom_end = 0;
-	bool did_window_zoom = false;
+	std::shared_ptr<Cursor> cursor;
 
-	float timeline_height = 100, waveforms_height = 100;
+	// float window_zoom_start = 0, window_zoom_end = 0;
+	// bool did_window_zoom = false;
+
+	float timeline_height = 40, waveforms_height = 100;
 	float label_width = 100, waveform_width = 100;
 	bool playing = false;
 
@@ -57,9 +45,9 @@ private:
 	std::unordered_map<NodeID, WaveDatabase> fac_dbs;
 
 public:
-	WaveformViewer(std::shared_ptr<FstFile> file, Highlights * highlights);
+	WaveformViewer(std::shared_ptr<FstFile> file, Highlights * highlights, std::shared_ptr<Cursor>);
 
-	uint64_t render();
+	void render();
 
 	void add(const NodeVar& var, std::span<std::string> group_hier = {});
 

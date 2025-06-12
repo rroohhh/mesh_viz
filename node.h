@@ -18,6 +18,7 @@ struct AsyncRunner;
 struct FstFile;
 struct Highlights;
 struct Histograms;
+struct SignalFlowTraces;
 
 struct NodeData
 {
@@ -39,7 +40,7 @@ struct Node : public std::enable_shared_from_this<Node>
 	NodeRoleAttr role;
 	SystemAttr<ParamsWrap<TraceFPGABandwidthParams>, ParamsWrap<PoissonEventTrafficParams>, ParamsWrap<FixedErrorModelParams>> system_config;
 
-	Node(int x, int y, NodeData data, std::shared_ptr<FstFile> ctx, NodeRoleAttr role, decltype(system_config) system_config, WaveformViewer* v, Histograms* hist, AsyncRunner * async_runner);
+	Node(int x, int y, NodeData data, std::shared_ptr<FstFile> ctx, NodeRoleAttr role, decltype(system_config) system_config, WaveformViewer* v, Histograms* hist, SignalFlowTraces * traces, AsyncRunner * async_runner);
 
 	void render(
 	    uint64_t c_time,
@@ -56,6 +57,9 @@ struct Node : public std::enable_shared_from_this<Node>
 	template<class ...Args>
 	void add_hist(Args && ...args);
 
+	template<class ...Args>
+	void add_trace(Args && ...args);
+
 	// TODO(robin): can I make this external to the class somehow?
 	void enqueue_task(std::function<pybind11::object(pybind11::object)>);
 
@@ -64,6 +68,7 @@ struct Node : public std::enable_shared_from_this<Node>
 private:
 	WaveformViewer* viewer;
 	Histograms* histograms;
+	SignalFlowTraces* signal_flow_traces;
 	AsyncRunner* async_runner;
 
 	void render_data(const NodeData& data, float width) const;

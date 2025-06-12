@@ -12,15 +12,6 @@
 #include <memory>
 #include <print>
 
-void Histograms::render()
-{
-	for (auto& [hist, id] : histograms) {
-		hist.render(id);
-	}
-	std::erase_if(histograms,
-	        [](auto& hist_id) { return not std::get<0>(hist_id).open; });
-}
-
 Histogram::Histogram(Highlights* highlights, std::shared_ptr<FstFile> fstfile, const NodeVar& var, const NodeVar& sampling_var, std::vector<NodeVar> conditions, std::vector<NodeVar> masks, bool negedge) :
     highlights(highlights), var(var), sampling_var(sampling_var), conditions(conditions), masks(masks), data_future{std::async(std::launch::async, [=] {
 	    FstFile my_fstfile(*fstfile);
@@ -196,11 +187,6 @@ void Histogram::set_query(decltype(query) new_value)
 	}
 }
 
-Histograms::Histograms(std::shared_ptr<FstFile> fstfile, Highlights* highlights) :
-    fstfile(fstfile), highlights(highlights)
-{
-}
-
 void Histogram::update_query()
 {
 	std::vector<WaveValue> values;
@@ -234,4 +220,18 @@ void Histogram::update_highlights()
 			highlights->add(handle, *highlighted);
 		}
 	}
+}
+
+void Histograms::render()
+{
+	for (auto& [hist, id] : histograms) {
+		hist.render(id);
+	}
+	std::erase_if(histograms,
+	        [](auto& hist_id) { return not std::get<0>(hist_id).open; });
+}
+
+Histograms::Histograms(std::shared_ptr<FstFile> fstfile, Highlights* highlights) :
+    fstfile(fstfile), highlights(highlights)
+{
 }

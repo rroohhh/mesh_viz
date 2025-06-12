@@ -1,11 +1,11 @@
 #include "async_runner.h"
-#include "highlights.h"
 #include "mesh_utils.h"
 #include "node.h"
 #include "node_var.h"
 #include "histogram.h"
+#include "signal_flow_traces.h"
 #include "fst_file.h"
-#include "waveform_viewer.h"
+#include "signal_flow_data.h"
 
 #include <print>
 #include <pybind11/embed.h>
@@ -64,12 +64,8 @@ PYBIND11_MAKE_OPAQUE(decltype(NodeVar::attrs))
 MYPYBIND11_MODULE(mesh_viz, m)
 {
 	m.def("load", [](std::string filename) {
-		AsyncRunner async_runner;
 		auto f = std::make_shared<FstFile>(filename.c_str());
-		Highlights highlights;
-		WaveformViewer waveform_viewer(f, &highlights);
-		Histograms histograms(f, &highlights);
-		return f->read_nodes(&waveform_viewer, &histograms, &async_runner);
+		return f->read_nodes(nullptr /*waveform_viewer*/, nullptr /*histograms*/, nullptr /*signal_flow_traces*/, nullptr /*async_runner*/);
 	});
 	py::bind_vector<std::vector<std::shared_ptr<Node>>>(m, "NodeVector");
 	py::bind_map<std::map<std::string, NodeVar>>(m, "MapStringNodeVar");
@@ -118,6 +114,11 @@ MYPYBIND11_MODULE(mesh_viz, m)
 	    .def_readonly("data", &Node::data)
 	    .def("get_current_var_value", &Node::get_current_var_value)
 	    .def("add_var_to_viewer", &Node::add_var_to_viewer)
+	    .def(
+	        "add_trace",
+	        [](Node& self, FlowData::id_t id) {
+		        return self.add_trace(id);
+	        })
 	    .def(
 	        "add_hist",
 	        [](Node& self, const NodeVar& var, const NodeVar& sampling_var,
@@ -213,6 +214,12 @@ template<class ...Args>
 void Node::add_hist(Args && ...args) {
 	std::println("add hist");
 	histograms->add(std::forward<Args>(args)...);
+}
+
+template<class ...Args>
+void Node::add_trace(Args && ...args) {
+	std::println("add trace");
+	signal_flow_traces->add(std::forward<Args>(args)...);
 }
 
 

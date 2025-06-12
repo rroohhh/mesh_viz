@@ -20,13 +20,15 @@
 #endif
 #include <GLFW/glfw3.h>
 
+#include "async_runner.h"
 #include "fonts.h"
 #include "fst_file.h"
-#include "nodes_panel.h"
-#include "waveform_viewer.h"
-#include "histogram.h"
 #include "highlights.h"
-#include "async_runner.h"
+#include "histogram.h"
+#include "node.h"
+#include "nodes_panel.h"
+#include "signal_flow_traces.h"
+#include "waveform_viewer.h"
 
 #include <pybind11/embed.h>
 namespace py = pybind11;
@@ -46,23 +48,22 @@ float scale = 1;
 
 // Main code
 namespace po = boost::program_options;
-int main(int ac, char ** av) {
-    po::options_description desc("Allowed options");
-    std::string filename;
-    std::string module_name;
-    bool run_script = false;
+int main(int ac, char** av)
+{
+	po::options_description desc("Allowed options");
+	std::string filename;
+	std::string module_name;
+	bool run_script = false;
 
-    // TODO(robin): configure link latency
-    desc.add_options()
-        ("help", "produce help message")
-        ("run_script", po::value<bool>(&run_script), "input file")
-        ("file", po::value<std::string>(&filename)->required(), "input file")
-        ("module", po::value<std::string>(&module_name)->required(), "python debug module")
-    ;
+	// TODO(robin): configure link latency
+	desc.add_options()("help", "produce help message")(
+	    "run_script", po::value<bool>(&run_script), "input file")(
+	    "file", po::value<std::string>(&filename)->required(), "input file")(
+	    "module", po::value<std::string>(&module_name)->required(), "python debug module");
 
-    po::variables_map vm;
-    po::store(po::parse_command_line(ac, av, desc), vm);
-    po::notify(vm);
+	po::variables_map vm;
+	po::store(po::parse_command_line(ac, av, desc), vm);
+	po::notify(vm);
 
 
 	signal(SIGINT, signalHandler);
@@ -75,9 +76,13 @@ int main(int ac, char ** av) {
 	AsyncRunner async_runner;
 	auto f = std::make_shared<FstFile>(filename.c_str());
 	Highlights highlights;
-	WaveformViewer waveform_viewer(f, &highlights);
+	auto cursor = std::make_shared<Cursor>(f->min_time(), f->max_time());
+	WaveformViewer waveform_viewer(f, &highlights, cursor);
 	Histograms histograms(f, &highlights);
-	NodesPanel panel(f->read_nodes(&waveform_viewer, &histograms, &async_runner));
+	SignalFlowTraces signal_flow_traces(f, cursor);
+	NodesPanel panel(
+	    f->read_nodes(&waveform_viewer, &histograms, &signal_flow_traces, &async_runner), cursor);
+	signal_flow_traces.load(panel.nodes);
 
 	auto process_func = module.attr("process");
 	if (run_script) {
@@ -115,8 +120,7 @@ int main(int ac, char ** av) {
 #endif
 
 	// Create window with graphics context
-	GLFWwindow* window =
-	    glfwCreateWindow(1280, 720, "mesh viz", nullptr, nullptr);
+	GLFWwindow* window = glfwCreateWindow(1280, 720, "mesh viz", nullptr, nullptr);
 	if (window == nullptr)
 		return 1;
 	glfwMakeContextCurrent(window);
@@ -147,10 +151,11 @@ int main(int ac, char ** av) {
 	icons_config.MergeMode = true;
 	icons_config.PixelSnapH = true;
 	// io.Fonts->AddFontFromFileTTF("fontawesome-webfont.ttf", 22.0f, &icons_config, icons_ranges);
-	io.Fonts->AddFontFromMemoryTTF(fontawesome_ttf, fontawesome_ttf_size, fontsize, &icons_config, icons_ranges);
+	io.Fonts->AddFontFromMemoryTTF(
+	    fontawesome_ttf, fontawesome_ttf_size, fontsize, &icons_config, icons_ranges);
 
 	ImGui::StyleColorsDark();
-	auto & style = ImGui::GetStyle();
+	auto& style = ImGui::GetStyle();
 	style.PopupRounding = 5.0f;
 
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -181,15 +186,12 @@ int main(int ac, char ** av) {
 
 		ImGui::DockSpaceOverViewport();
 		{
-
 			histograms.render();
-			auto current_time = waveform_viewer.render();
+			signal_flow_traces.render();
+			waveform_viewer.render();
 
 			ImGui::Begin(
-			    "Mesh", nullptr,
-			    ImGuiWindowFlags_NoScrollbar |
-			        ImGuiWindowFlags_NoScrollWithMouse); // Create a window called "Hello, world!"
-			                                             // and append into it.
+			    "Mesh", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 			if (ImGui::IsKeyPressed(ImGuiKey_R)) {
 				try {
 					module.reload();
@@ -203,11 +205,9 @@ int main(int ac, char ** av) {
 
 			ImVec2 canvas_p1 = ImVec2(canvas_p0.x + canvas_sz.x, canvas_p0.y + canvas_sz.y);
 
-			panel.render(current_time, canvas_p0, canvas_p1, process_func);
+			panel.render(canvas_p0, canvas_p1, process_func);
 
 			ImGui::End();
-
-			// auto [current_time, min_time, max_time] = timeline.render();
 		}
 
 		// Rendering

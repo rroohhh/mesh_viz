@@ -4,6 +4,17 @@ import re
 import numpy as np
 from math import pi as π, sin, cos
 
+def bb_contains(bb_a, bb_b, point):
+    min_x = min(bb_a.x, bb_b.x)
+    min_y = min(bb_a.y, bb_b.y)
+
+    max_x = max(bb_a.x, bb_b.x)
+    max_y = max(bb_a.y, bb_b.y)
+
+    print(bb_a, bb_b, point)
+
+    return point.x >= min_x and point.x <= max_x and point.y >= min_y and point.y <= max_y
+
 N_VC = 2
 
 import imgui
@@ -85,6 +96,8 @@ def process(n):
                 dump(subscope)
                 imgui.tree_pop()
         for name, v in d.variables.items():
+            if "signal_flow_sample" in v.attrs or "signal_flow_sample_strobe" in v.attrs:
+                continue
             if imgui.selectable(name, 0)[0]:
                 n.add_var_to_viewer(v)
             if imgui.begin_popup_context_item(None):
@@ -190,6 +203,7 @@ def process(n):
             imgui.set_cursor_screen_pos(mid + (min(target_min.x, target_max.x), min(target_min.y, target_max.y)))
             bsz = target_max - target_min
             bsz = (abs(bsz.x), abs(bsz.y))
+
             imgui.invisible_button(str(d) + "_rx" + str(vc), bsz)
             if imgui.begin_popup_context_item(None):
                 if imgui.selectable("add to viewer", False)[0]:
@@ -205,32 +219,53 @@ def process(n):
            (d == Dir.SOUTH and (n.y + 1) < n.system_config.width) or \
            (d == Dir.WEST and n.x > 0) or \
            (d == Dir.EAST and (n.x + 1) < n.system_config.height):
-            draw_fg = imgui.get_foreground_draw_list()
             # if (n.x + 1) < n.system_config.width:
             handle = mid + master_max + d.t((-sz_r.x / 2, 0), (0.0, 0.0))
             delta = d.t((0.0, sz.x / 1), (0.0, 0.0))
             tip = handle + delta
             tip_s = sz.x / 5
             tip_delta = d.t((-tip_s, -tip_s), (0.0, 0.0))
-            draw_fg.add_line(handle, handle + delta, 0xffffffff)
-            draw_fg.add_line(tip, tip + tip_delta, 0xffffffff)
+            draw.add_line(handle, handle + delta, 0xffffffff)
+            draw.add_line(tip, tip + tip_delta, 0xffffffff)
             tip_delta = d.t((tip_s, -tip_s), (0.0, 0.0))
-            draw_fg.add_line(tip, tip + tip_delta, 0xffffffff)
+            draw.add_line(tip, tip + tip_delta, 0xffffffff)
 
 
             # TODO(robin): use flit parsing here by including memory_mapped_router.py
             v = var(f"link_{d.name.lower()[0]}_o__payload")
 
+            def packet_label(pos, text, var_value, t_size):
+                if pos is not None:
+                    io = imgui.get_io()
+                    popup_id = "popup_id"
+                    if imgui.is_mouse_released(1):
+                        if bb_contains(pos, pos + t_size, io.mouse_pos):
+                            imgui.open_popup(popup_id)
+                    if imgui.begin_popup(popup_id):
+                        if imgui.selectable("show trace", False)[0]:
+                            # TODO(robin): very magic constant
+                            shift = 10
+                            if "start" in pretty:
+                                shift = 24
+                            # print(var_value)
+                            # print(vv)
+                            n.add_trace((var_value >> shift) & 0xffff_ffff)
+                        imgui.end_popup()
+                    draw.add_text(pos, 0xffffffff, text)
+
             vv = n.get_current_var_value(v)
-            if int(vv, 2) != 0:
+            vv_num = int(vv, 2)
+            if vv_num != 0:
                 pretty = v.format(vv)
 
                 t_sz = imgui.calc_text_size(pretty)
                 if t_sz.x < 8 * sz.x:
+                    pos = None
                     if d == Dir.NORTH:
-                        draw_fg.add_text(handle - t_sz * (1.0, 0.0), 0xffffffff, pretty)
+                        pos = handle - t_sz * (1.0, 0.0)
                     if d == Dir.SOUTH:
-                        draw_fg.add_text(handle - t_sz * (0.0, 1.0), 0xffffffff, pretty)
+                        pos = handle - t_sz * (0.0, 1.0)
+                    packet_label(pos, pretty, vv_num, t_sz)
 
             v = var(f"link_{d.name.lower()[0]}_i__p")
             vv = n.get_current_var_value(v)
@@ -240,9 +275,9 @@ def process(n):
                 t_sz = imgui.calc_text_size(pretty)
                 if t_sz.x < 8 * sz.x:
                     if d == Dir.NORTH:
-                        draw_fg.add_text(handle - t_sz * (0.0, 0.0) + sz_r * (1.0, 0.0), 0xffffffff, pretty)
+                        draw.add_text(handle - t_sz * (0.0, 0.0) + sz_r * (1.0, 0.0), 0xffffffff, pretty)
                     if d == Dir.SOUTH:
-                        draw_fg.add_text(handle - t_sz * (1.0, 1.0) - sz_r * (1.0, 0.0), 0xffffffff, pretty)
+                        draw.add_text(handle - t_sz * (1.0, 1.0) - sz_r * (1.0, 0.0), 0xffffffff, pretty)
 
             data_sent_var = var(f"{d.name.lower()}.data_sent")
             data_sent = n.get_current_var_value(data_sent_var)

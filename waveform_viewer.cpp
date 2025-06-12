@@ -1,26 +1,19 @@
+#include "canvas_util.h"
+
 #include "waveform_viewer.h"
 #include "IconsFontAwesome4.h"
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "utils.cpp"
 #include "highlights.h"
 #include "fst_file.h"
 #include "node.h"
 
-#include <future>
+#include <algorithm>
 #include <print>
+#include "format_util.h"
 
-void DrawCenterText(auto& draw, const char* text, const ImVec2& pos)
-{
-	auto sz = ImGui::CalcTextSize(text);
-	draw->AddText(pos - ImVec2(sz.x / 2, 0), 0xffffffff, text);
-}
-
-void DrawVLine(
-    auto& draw, const ImVec2& min, const ImVec2& sz, double x, int col, float thickness = 1.0f)
-{
-	draw->AddLine(min + ImVec2(x, 0), min + ImVec2(x, sz.y), col, thickness);
-}
-
+// returns the end of the text
 auto clip_text_to_width(std::span<char> text, float pixels)
 {
 	const char* indicator = "+";
@@ -36,82 +29,25 @@ auto clip_text_to_width(std::span<char> text, float pixels)
 		auto end = std::partition_point(text.begin(), text.end(), [=](char& end) {
 			return ImGui::CalcTextSize(text.data(), &end).x < pixels;
 		});
-		// this should always be valid, as:
-		// 1. we always clip atleast one char (otherwise the full thing fits and the early check
-		// succeeds)
-		end[0] = indicator[0];
-		end[1] = '\0';
+		if (std::distance(end, text.end()) > 1) {
+			// this should always be valid, as:
+			// 1. we always clip atleast one char (otherwise the full thing fits and the early check
+			// succeeds)
+			if (end == text.begin()) {
+				end[0] = '\0';
+			} else {
+				end[0] = indicator[0];
+			}
+			end[1] = '\0';
+		}
 		return end + 1;
 	}
 }
 
-auto Timeline::render(double zoom, double offset, uint64_t cursor_value, ImRect bb)
-{
-	int64_t min_time = file->min_time();
-	int64_t max_time = file->max_time();
-
-	auto sz = bb.GetSize();
-	auto line_height = ImGui::GetTextLineHeight();
-	sz.y -= line_height;
-
-	auto width = sz.x;
-	auto text_min = bb.Min;
-	auto min = text_min + ImVec2{0, line_height};
-
-	first_time = clip(min_time - (int64_t) floor(offset), min_time, max_time);
-	int64_t last_time_unclipped = first_time + width / zoom;
-	last_time = clip(last_time_unclipped, min_time, max_time);
-	bool draw_last = last_time_unclipped > max_time;
-
-	auto draw = ImGui::GetWindowDrawList();
-
-	// Draw time grid
-	// want a marker every 10 pixels, so calculate how much every 10 pixels is
-	double b = 10;
-	double fine_width = b / zoom;
-	double human_base = 10;
-	int64_t log_step = ceil(log(fine_width) / log(human_base));
-	int64_t fine_step = powf(human_base, log_step);
-	int64_t coarse_step = powf(human_base, log_step + 1);
-
-	if (fine_step > 0) {
-		int64_t time_value = ((first_time + fine_step - 1) / fine_step) * fine_step;
-		while (time_value <= last_time) {
-			DrawVLine(draw, min, ImVec2(sz.x, 10), (time_value + offset) * zoom, TIMELINE_TICK_COL);
-			time_value += fine_step;
-		}
-	}
-
-	if (coarse_step > 0) {
-		int64_t time_value = ((first_time + coarse_step - 1) / coarse_step) * coarse_step;
-		while (time_value <= last_time or draw_last) {
-			if (time_value > last_time) {
-				time_value = last_time;
-				draw_last = false;
-			}
-			DrawCenterText(
-			    draw, std::format("{}", time_value).c_str(),
-			    text_min + ImVec2{(time_value + offset) * zoom, 0});
-			DrawVLine(draw, min, sz, (time_value + offset) * zoom, TIMELINE_TICK_COL, 3.0f);
-			time_value += coarse_step;
-		}
-	}
-
-	// Draw cursor
-	double c_pos = ((double) cursor_value + offset) * zoom;
-	if (c_pos > 0) {
-		DrawVLine(draw, min, sz, c_pos, CURSOR_COL, 2.0f);
-	}
-
-	return std::tuple{first_time, last_time};
-}
-
-Timeline::Timeline(std::shared_ptr<FstFile> file) : file(file) {}
-
-WaveformViewer::WaveformViewer(std::shared_ptr<FstFile> file, Highlights * highlights) : file(file), highlights(highlights), timeline(file) {}
+WaveformViewer::WaveformViewer(std::shared_ptr<FstFile> file, Highlights * highlights, std::shared_ptr<Cursor> cursor) : file(file), highlights(highlights), timeline(file->min_time(), file->max_time(), cursor), cursor(cursor) {}
 
 // TODO(robin): add group hierarchies
-void WaveformViewer::add(const NodeVar& var, std::span<std::string> group_hier)
+void WaveformViewer::add(const NodeVar& var, std::span<std::string> /* group_hier */)
 {
 	auto guard = std::lock_guard(mutex);
 	vars.push_back(var);
@@ -120,7 +56,7 @@ void WaveformViewer::add(const NodeVar& var, std::span<std::string> group_hier)
 	}
 }
 
-uint64_t WaveformViewer::render()
+void WaveformViewer::render()
 {
 	auto guard = std::lock_guard(mutex);
 
@@ -128,86 +64,15 @@ uint64_t WaveformViewer::render()
 	int64_t max_time = file->max_time();
 
 	ImGui::Begin("WaveformViewer");
-	auto sz = ImGui::GetContentRegionAvail();
-	sz.x = max(sz.x, 1);
-	sz.y = max(sz.y, 1);
-	auto width = sz.x;
-
 	auto min = ImGui::GetCursorScreenPos();
-	auto draw = ImGui::GetWindowDrawList();
+	auto sz = ImGui::GetContentRegionAvail();
+	auto io = ImGui::GetIO();
 
-	// input handling
-	{
-		ImGui::SetNextItemAllowOverlap();
-		ImGui::InvisibleButton(
-		    "canvas", sz,
-		    ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight |
-		        ImGuiButtonFlags_MouseButtonMiddle);
-
-
-		ImGuiIO& io = ImGui::GetIO();
-
-		const auto waveform_bb = ImRect(min + ImVec2(label_width, 0), min + sz);
-
-		const auto is_hovered = ImGui::IsItemHovered() or (waveform_bb.Contains(io.MousePos));
-		const auto is_active =
-		    ImGui::IsItemActive() or
-		    (is_hovered and (ImGui::IsMouseDown(ImGuiButtonFlags_MouseButtonLeft) or
-		                     ImGui::IsMouseDown(ImGuiButtonFlags_MouseButtonRight) or
-		                     ImGui::IsMouseDown(ImGuiButtonFlags_MouseButtonMiddle)));
-
-		if (is_active && ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0)) {
-			const auto origin = io.MousePos - ImGui::GetMouseDragDelta(ImGuiMouseButton_Right, 0);
-			// std::println("origin {}, mousepos {}, waveform_bb {} to {}", origin, io.MousePos, waveform_bb.Min, waveform_bb.Max);
-			if (waveform_bb.Contains(origin)) {
-				// std::println("dragging {}", offset_f, io.MouseDelta.x / zoom);
-				offset_f += io.MouseDelta.x / zoom;
-			}
-		}
-		if (is_active && ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 5.0)) {
-			auto delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Middle, 0);
-			auto orig = io.MousePos - delta;
-			did_window_zoom = true;
-			auto start = ::min(orig.x, io.MousePos.x);
-			auto end = ::max(orig.x, io.MousePos.x);
-			window_zoom_start = (start - label_width) / zoom - offset_f;
-			window_zoom_end = (end - label_width) / zoom - offset_f;
-		}
-		if (did_window_zoom) {
-			DrawVLine(draw, min, sz, label_width + (window_zoom_start + offset_f) * zoom, 0xff0000ff, 2.0f);
-			DrawVLine(draw, min, sz, label_width + (window_zoom_end + offset_f) * zoom, 0xff0000ff, 2.0f);
-		}
-		if (ImGui::IsMouseReleased(ImGuiMouseButton_Middle) and did_window_zoom) {
-			window_zoom_end = (io.MousePos.x - label_width) / zoom - offset_f;
-			offset_f = -window_zoom_start;
-			zoom = 0.98 * width / (window_zoom_end - window_zoom_start);
-			did_window_zoom = false;
-		}
-		if (is_hovered and ImGui::IsKeyDown(ImGuiMod_Ctrl)) {
-			double old_zoom = zoom;
-			// TODO(robin): do this log style
-			if (io.MouseWheel > 0) {
-				zoom /= std::powf(1.1, io.MouseWheel);
-			} else if (io.MouseWheel < 0) {
-				zoom /= std::pow(0.9, std::fabs(io.MouseWheel));
-			}
-			offset_f -= (io.MousePos.x - min.x - label_width) * (1.0 / old_zoom - 1.0 / zoom);
-		}
-		if (is_hovered) {
-			offset_f += MOUSE_WHEEL_DRAG_FACTOR * io.MouseWheelH / zoom;
-		}
-		if (is_hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Right)) {
-			offset_f = 0;
-			zoom = 0.98 * width / (max_time - min_time);
-		}
-		if (is_active && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0)) {
-			cursor_value =
-			    clip((io.MousePos.x - min.x - label_width) / zoom - offset_f, min_time, max_time);
-			playing = false;
-		}
-
-		ImGui::SetCursorScreenPos(min);
-	}
+	// the canvas is waveforms + timeline
+	// so position to the right of the labels
+	ImGui::SetCursorScreenPos(min + ImVec2(label_width, 0));
+	bool canvas_hovered = Canvas2D(offset_f, zoom, min_time, max_time);
+	bool held = false;
 
 	// layout splitters
 	{
@@ -215,7 +80,7 @@ uint64_t WaveformViewer::render()
 		waveforms_height = sz.y - timeline_height;
 		ImRect timeline_splitter_bb(
 		    min + ImVec2(0, -1.0f + timeline_height), min + ImVec2(sz.x, 1.0f + timeline_height));
-		ImGui::SplitterBehavior(
+		held |= ImGui::SplitterBehavior(
 		    timeline_splitter_bb, ImGui::GetID("timeline##Splitter"), ImGuiAxis_Y, &timeline_height,
 		    &waveforms_height, 5, 5);
 
@@ -223,52 +88,60 @@ uint64_t WaveformViewer::render()
 		ImRect waveform_splitter_bb(
 		    min + ImVec2(-1.0f + label_width, timeline_height),
 		    min + ImVec2(1.0f + label_width, sz.y));
-		ImGui::SplitterBehavior(
+		held |= ImGui::SplitterBehavior(
 		    waveform_splitter_bb, ImGui::GetID("label##Splitter"), ImGuiAxis_X, &label_width,
 		    &waveform_width, 5, 5);
 	}
 
-
+	ImGui::SetCursorScreenPos(min);
 	if (ImGui::SmallButton(playing ? ICON_FA_PAUSE "###playing" : ICON_FA_PLAY "###playing")) {
 		playing = not playing;
 	}
-	if (cursor_value >= (uint64_t) max_time) {
+	// reset to avoid offset by button
+	ImGui::SetCursorScreenPos(min);
+
+	if (cursor->pos >= max_time) {
 		playing = false;
 	}
 	if (playing)
-		cursor_value++;
-	ImGui::SetCursorScreenPos(min);
+		cursor->pos++;
 
 
-	ImRect timeline_bb(min + ImVec2(label_width, 0), min + ImVec2(sz.x, timeline_height));
-	auto [first_time, last_time] = timeline.render(zoom, offset_f, cursor_value, timeline_bb);
+
+	// ImRect timeline_bb(min + ImVec2(label_width, 0), min + ImVec2(sz.x, timeline_height));
+
+	ImGui::SetCursorScreenPos(min + ImVec2(label_width, 0));
+	ImGui::BeginChild("timeline", ImVec2(sz.x - label_width, timeline_height), 0);
+	auto [first_time, last_time] = timeline.render(zoom, offset_f);
+	ImGui::EndChild();
 	// draw one more to get the piece that is partially cut off
 	last_time += 1;
 
-	double offset = offset_f;
+	ImGui::SetCursorScreenPos(min + ImVec2(0, timeline_height));
 
 	// waveform labels
 	{
-		min = ImGui::GetCursorScreenPos() + ImVec2(0, timeline_height);
-		ImGui::SetCursorScreenPos(min);
+		min = ImGui::GetCursorScreenPos();
 
 		ImGui::PushClipRect(min, min + sz, false);
 		ImGui::SetNextWindowScroll(ImVec2(0.0, -1.0));
 
 		// TODO(robin): mouse io for this
-		ImGui::BeginChild("waveforms");
+		ImGui::BeginChild("waveforms", {0, 0}, 0);
+
 		// padding between timeline and us
 		ImGui::Dummy(ImVec2(0.0, 10.0));
 
 		bool first = true;
 		ImGuiListClipper clipper;
+		std::vector<int> to_remove;
 		clipper.Begin(vars.size(), ImGui::GetTextLineHeightWithSpacing());
 		while (clipper.Step()) {
 			for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++) {
 				auto& var = vars[i];
 				// std::println("var: {}", var.name);
 
-				char* val = var.value_at_time(cursor_value);
+				char* val = var.value_at_time(cursor->pos);
 				auto formatted = var.format(val);
 				auto text = std::format("{}: {}", var.pretty_name(), formatted.data());
 				std::span<char> text_span = text;
@@ -283,6 +156,9 @@ uint64_t WaveformViewer::render()
 				if  (ImGui::IsItemHovered()) {
 					var.owner_node->highlight = true;
 				}
+				if  (ImGui::IsItemClicked(ImGuiMouseButton_Middle)) {
+					to_remove.push_back(i);
+				}
 				ImGui::SameLine();
 
 				if (not first) {
@@ -291,14 +167,20 @@ uint64_t WaveformViewer::render()
 				}
 				first = false;
 
-				ImGui::SetCursorPosX(label_width);
-				auto size_x = ImGui::GetContentRegionAvail().x;
-				ImGui::Dummy(ImVec2(size_x, ImGui::GetTextLineHeightWithSpacing()));
-				if  (ImGui::IsItemHovered()) {
+				auto base =	ImVec2(label_width, ImGui::GetCursorScreenPos().y);
+				auto line_sz = ImVec2(ImGui::GetContentRegionAvail().x, ImGui::GetTextLineHeightWithSpacing());
+				if (canvas_hovered and ImRect(base, base + line_sz).Contains(io.MousePos)) {
 					var.owner_node->highlight = true;
 				}
 
-				ImGui::SameLine();
+				// ImGui::SetCursorPosX(label_width);
+				// auto size_x =
+				// ImGui::Dummy(ImVec2(size_x, ImGui::GetTextLineHeightWithSpacing()));
+				// if  (ImGui::IsItemHovered()) {
+				// 	var.owner_node->highlight = true;
+				// }
+
+				// ImGui::SameLine();
 
 				ImGui::SetCursorPosX(label_width);
 
@@ -315,19 +197,36 @@ uint64_t WaveformViewer::render()
 				ImGui::PopID();
 			}
 		}
+
+		for	(auto idx : to_remove | std::views::reverse) {
+			vars.erase(vars.begin() + idx);
+		}
+
 		ImGui::EndChild();
 		ImGui::PopClipRect();
 	}
 
 	// Cursor
-	auto c_pos = label_width + (cursor_value + offset) * zoom;
+	ImGui::SetCursorScreenPos(min + ImVec2(label_width, 0));
 
-	if (c_pos >= label_width) {
-		DrawVLine(draw, min, sz, c_pos, CURSOR_COL, 2.0f);
+	// if () {
+	// 	if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+	// 		cursor->pos =
+	// 			clip((io.MousePos.x - min.x - label_width) / zoom - offset_f, min_time, max_time);
+	// 		playing = false;
+	// 	}
+	// }
+
+	if (cursor->render(offset_f, zoom, canvas_hovered and not held and ImGui::IsMouseDown(ImGuiMouseButton_Left))) {
+		playing = false;
 	}
 
+	// auto c_pos = label_width + (cursor->pos + offset) * zoom;
+	// if (c_pos >= label_width) {
+	// 	DrawVLine(draw, min, sz, c_pos, CURSOR_COL, 2.0f);
+	// }
+
 	ImGui::End();
-	return cursor_value;
 }
 
 void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const NodeVar& var)

@@ -27,7 +27,7 @@ uint64_t FstFile::min_time() const
 	return fstReaderGetStartTime(reader);
 }
 
-std::vector<std::shared_ptr<Node>> FstFile::read_nodes(WaveformViewer * waveform_viewer, Histograms * histograms, AsyncRunner * async_runner)
+std::vector<std::shared_ptr<Node>> FstFile::read_nodes(WaveformViewer * waveform_viewer, Histograms * histograms, SignalFlowTraces * signal_flow_traces, AsyncRunner * async_runner)
 {
 	std::vector<std::shared_ptr<Node>> nodes;
 
@@ -42,7 +42,7 @@ std::vector<std::shared_ptr<Node>> FstFile::read_nodes(WaveformViewer * waveform
 	std::vector<std::string> hierarchy_stack;
 	decltype(Node::role) node_role;
 	decltype(Node::system_config) system_config;
-	auto node = std::make_shared<Node>(0, 0, NodeData{}, shared_from_this(), node_role, system_config, waveform_viewer, histograms, async_runner);
+	auto node = std::make_shared<Node>(0, 0, NodeData{}, shared_from_this(), node_role, system_config, waveform_viewer, histograms, signal_flow_traces, async_runner);
 	NodeData* current_node_data;
 	uint32_t max_bits = 0;
 	std::shared_ptr<Formatter> formatter{new HexFormatter{}};
@@ -122,7 +122,7 @@ std::vector<std::shared_ptr<Node>> FstFile::read_nodes(WaveformViewer * waveform
 					if (nodeattr) {
 						assert(not in_node_scope);
 						next_is_node = true;
-						node = std::make_shared<Node>(nodeattr->x, nodeattr->y, NodeData{}, shared_from_this(), node_role, system_config, waveform_viewer, histograms, async_runner);
+						node = std::make_shared<Node>(nodeattr->x, nodeattr->y, NodeData{}, shared_from_this(), node_role, system_config, waveform_viewer, histograms, signal_flow_traces, async_runner);
 						current_node_data = &node->data;
 					}
 					auto signalattr = std::get_if<SignalAttr>(&parsed);
@@ -132,6 +132,7 @@ std::vector<std::shared_ptr<Node>> FstFile::read_nodes(WaveformViewer * waveform
 							    parse_formatter(std::get<std::string>(signalattr->value))});
 						}
 						SignalAttr attr = *signalattr;
+						// std::println("attr: {} = {}", attr.name, attr.value);
 						var_attrs.insert({attr.name, attr.value});
 					}
 					auto system_attr = std::get_if<decltype(Node::system_config)>(&parsed);
@@ -207,6 +208,9 @@ WaveDatabase FstFile::read_wave_db(NodeVar var) const
 // }
 
 // NOTE(robin): untested for idx > 1
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#pragma GCC diagnostic ignored "-Wshift-count-overflow"
 template<class T, uint16_t idx>
 T from_bytes(const byte_t* data) {
 	if constexpr(idx == 1) {
@@ -215,6 +219,7 @@ T from_bytes(const byte_t* data) {
 		return ((data[0]) << (8 * (idx - 1))) | from_bytes<T, idx - 1>(data + 1);
 	}
 }
+#pragma GCC diagnostic pop
 
 // TODO(robin): do caching? or multithreading?
 template <class T, class O>
@@ -288,7 +293,7 @@ O FstFile::read_values_inner(const NodeVar & var) const
 		    last_time = time;
 	    });
 
-	if (last_time < max_time()) {
+	if (last_time < (int64_t) max_time()) {
 		std::fill(std::execution::unseq, std::begin(values) + last_time + 1, std::begin(values) + max_time(), values[last_time]);
 		// values.insert(values.end(), max_time() - last_time - 1, values.back());
 	}

@@ -10,7 +10,9 @@ class LruCache {
   std::unordered_map<KeyT, std::pair<age_t, DataT>> data;
 
 public:
-  LruCache(size_t cap) : cap(cap) {}
+  LruCache(size_t cap) : cap(cap) {
+    assert(cap > 0);
+  }
 
   const DataT* get(KeyT key) {
     auto it = data.find(key);
@@ -24,7 +26,7 @@ public:
 
   void add(KeyT key, DataT new_data) {
     if (usage.size() > cap) {
-      KeyT to_remove;
+      KeyT to_remove = data.begin()->first;
       age_t oldest = std::numeric_limits<age_t>::max();
       for (auto & [key, value] : data) {
         auto & [age, _] = value;

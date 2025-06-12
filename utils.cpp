@@ -1,5 +1,6 @@
-#include<future>
-#include<format>
+#include "imgui.h"
+#include <future>
+#include <format>
 
 template <>
 struct std::formatter<ImVec2, char>
@@ -68,3 +69,17 @@ inline std::future<T> resolved_future(T && value) {
 	promise.set_value(std::move(value));
 	return promise.get_future();
 }
+
+inline void DrawCenterText(auto& draw, const char* text, const ImVec2& pos)
+{
+	auto sz = ImGui::CalcTextSize(text);
+	draw->AddText(pos - ImVec2(sz.x / 2, 0), 0xffffffff, text);
+}
+
+inline void DrawVLine(
+    auto& draw, const ImVec2& min, const ImVec2& sz, double x, int col, float thickness = 1.0f)
+{
+	draw->AddLine(min + ImVec2(x, 0), min + ImVec2(x, sz.y), col, thickness);
+}
+
+

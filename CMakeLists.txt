@@ -13,7 +13,7 @@ set_target_properties(gflags_shared PROPERTIES
 
 set (CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
-set (EXECUTABLE_OPT_FILES imgui/imgui.cpp imgui/imgui_demo.cpp  imgui/imgui_widgets.cpp imgui/imgui_draw.cpp imgui/imgui_tables.cpp imgui/backends/imgui_impl_glfw.cpp imgui/backends/imgui_impl_opengl3.cpp pybind_imgui.cpp formatter.cpp waveform_viewer.cpp node.cpp bind.cpp nodes_panel.cpp core.cpp fst_file.cpp wave_data_base.cpp implot/implot.cpp implot/implot_items.cpp histogram.cpp inverted_index.cpp ../toplevel/mesh_utils.cpp highlights.cpp node_var.cpp fst_reader.cpp maskedvbyte/src/varintdecode.c)
+set (EXECUTABLE_OPT_FILES imgui/imgui.cpp imgui/imgui_demo.cpp  imgui/imgui_widgets.cpp imgui/imgui_draw.cpp imgui/imgui_tables.cpp imgui/backends/imgui_impl_glfw.cpp imgui/backends/imgui_impl_opengl3.cpp pybind_imgui.cpp formatter.cpp waveform_viewer.cpp node.cpp bind.cpp nodes_panel.cpp core.cpp fst_file.cpp wave_data_base.cpp implot/implot.cpp implot/implot_items.cpp histogram.cpp inverted_index.cpp ../toplevel/mesh_utils.cpp highlights.cpp node_var.cpp fst_reader.cpp maskedvbyte/src/varintdecode.c signal_flow_data.cpp signal_flow_traces.cpp timeline.cpp canvas_util.cpp cursor.cpp)
 set (EXECUTABLE_FILES main.cpp fonts.s ${EXECUTABLE_OPT_FILES})
 set_source_files_properties(fonts.s OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/NotoSans[wdth,wght].ttf;${CMAKE_SOURCE_DIR}/fontawesome-webfont.ttf"
 )
@@ -51,8 +51,8 @@ target_compile_options(mesh_viz PRIVATE -fmax-errors=1)
 # target_compile_options(mesh_viz PRIVATE -flto)
 # target_link_options(mesh_viz PRIVATE -flto)
 
-# target_compile_options(mesh_viz PRIVATE -fsanitize=address)
-# target_link_options(mesh_viz PRIVATE -fsanitize=address)
+target_compile_options(mesh_viz PRIVATE -fsanitize=address)
+target_link_options(mesh_viz PRIVATE -fsanitize=address)
 
 
 

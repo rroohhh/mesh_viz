@@ -1,5 +1,6 @@
 #include "node.h"
 
+#include "imgui.h"
 #include "utils.cpp"
 #include "fst_file.h"
 #include "waveform_viewer.h"
@@ -10,6 +11,9 @@ void Node::render(
     const float& zoom,
     std::function<void(std::shared_ptr<Node>)> process_func)
 {
+	auto screen_min = ImGui::GetWindowPos();
+	auto screen_sz = ImGui::GetWindowSize();
+
 	current_time = c_time;
 	auto label = std::format("[{}, {}]", x, y);
 	ImGui::PushID(label.c_str());
@@ -37,13 +41,19 @@ void Node::render(
 		// }
 		// + ImVec2{0, ImGui::GetTextLineHeight()}
 		ImGui::SetCursorScreenPos(min);
-		ImGui::BeginChild(label.c_str(), size);
+
+		ImGui::BeginChild(label.c_str(), size, ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+		ImGui::PushClipRect(screen_min, screen_min + screen_sz, false);
+
+
 		try {
 			process_func(this->shared_from_this());
 		} catch (const std::exception& e) {
 			std::cout << e.what() << std::endl;
 			// std::println("exception while executing python code: {}", std::current_exception());
 		}
+		ImGui::PopClipRect();
 		// render_data(data, NODE_SIZE * zoom);
 		ImGui::EndChild();
 	}
@@ -94,8 +104,8 @@ Node::Node(
     NodeData data,
     std::shared_ptr<FstFile> ctx,
     NodeRoleAttr role,
-    decltype(system_config) system_config, WaveformViewer* viewer, Histograms* histograms, AsyncRunner * async_runner) :
-    x(x), y(y), data(data), role(role), system_config(system_config), ctx(ctx), viewer(viewer), histograms(histograms), async_runner(async_runner)
+    decltype(system_config) system_config, WaveformViewer* viewer, Histograms* histograms, SignalFlowTraces * signal_flow_traces, AsyncRunner * async_runner) :
+    x(x), y(y), data(data), role(role), system_config(system_config), ctx(ctx), viewer(viewer), histograms(histograms), signal_flow_traces(signal_flow_traces), async_runner(async_runner)
 {
 }
 
