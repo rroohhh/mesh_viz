@@ -74,7 +74,7 @@ void SignalFlowTrace::render(int win_id)
 				std::println("setting {}, {}", offset_f, zoom);
 			}
 			auto timeline_start = ImGui::GetCursorScreenPos();
-			auto timeline_height = 40;
+			auto timeline_height = ImGui::GetFontSize() + 20 * scale;
 			auto timeline_end = timeline_start + ImVec2(sz.x, timeline_height);
 
 			// std::println("timeline start {}, timeline end {}", timeline_start, timeline_end);
@@ -218,7 +218,7 @@ void SignalFlowTrace::render(int win_id)
 							auto sz = ImGui::CalcTextSize(name.c_str());
 
 							if (sz.x < (zone_end.x - zone_start.x)) {
-								draw->AddText(nullptr, 24.0f, (zone_end + zone_start) / 2.0 - sz / 2.0, 0xffffffff, name.c_str());
+								draw->AddText(nullptr, 24.0f * scale, (zone_end + zone_start) / 2.0 - sz / 2.0, text_color(), name.c_str());
 							}
 
 							ImGui::SetCursorScreenPos(zone_start);

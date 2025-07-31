@@ -402,8 +402,8 @@ void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const 
 	draw->Flags &= ~ImDrawListFlags_AntiAliasedLines;
 	// std::println("drawing lines with {} and {} points", lines_a.size(),
 	// lines_b.size());
-	draw->AddPolyline(&lines_a[0], lines_a.size(), 0xffffffff, 0, 1.0f / DPI_SCALE);
-	draw->AddPolyline(&lines_b[0], lines_b.size(), 0xffffffff, 0, 1.0f / DPI_SCALE);
+	draw->AddPolyline(&lines_a[0], lines_a.size(), ImColor(ImGui::GetStyle().Colors[ImGuiCol_Text]), 0, 1.0f / DPI_SCALE);
+	draw->AddPolyline(&lines_b[0], lines_b.size(), ImColor(ImGui::GetStyle().Colors[ImGuiCol_Text]), 0, 1.0f / DPI_SCALE);
 	draw->Flags |= ImDrawListFlags_AntiAliasedLines;
 	float last = 0;
 	for (size_t i = 0; i < highlights_to_draw.size(); i+= 2) {
@@ -432,6 +432,6 @@ void WaveformViewer::draw_waveform(int64_t first_time, int64_t last_time, const 
 		auto end = clip_text_to_width(text, text_space - 3 * PADDING - 2 * FEATHER_SIZE);
 		draw->AddText(
 			base + ImVec2(max(0, screen_time) + 1 * PADDING + FEATHER_SIZE, -PADDING),
-			0xffffffff, &*text.begin(), &*end);
+			ImColor(ImGui::GetStyle().Colors[ImGuiCol_Text]), &*text.begin(), &*end);
 	}
 }

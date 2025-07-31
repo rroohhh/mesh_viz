@@ -115,6 +115,16 @@ MYPYBIND11_MODULE(mesh_viz, m)
 	    .def("get_current_var_value", &Node::get_current_var_value)
 	    .def("add_var_to_viewer", &Node::add_var_to_viewer)
 	    .def(
+	        "scale",
+	        [](Node&) {
+		        return scale;
+	        })
+	    .def(
+	        "text_color",
+	        [](Node&) {
+		        return ImU32(ImColor(ImGui::GetStyle().Colors[ImGuiCol_Text]));
+	        })
+	    .def(
 	        "add_trace",
 	        [](Node& self, FlowData::id_t id) {
 		        return self.add_trace(id);

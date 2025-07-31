@@ -63,6 +63,11 @@ inline auto clip(auto a, auto min, auto max)
 	return ::min(::max(a, min), max);
 }
 
+inline auto text_color() {
+	return ImU32(ImColor(ImGui::GetStyle().Colors[ImGuiCol_Text]));
+}
+
+
 template<class T>
 inline std::future<T> resolved_future(T && value) {
 	std::promise<T>	promise;
@@ -73,13 +78,13 @@ inline std::future<T> resolved_future(T && value) {
 inline void DrawCenterText(auto& draw, const char* text, const ImVec2& pos)
 {
 	auto sz = ImGui::CalcTextSize(text);
-	draw->AddText(pos - ImVec2(sz.x / 2, 0), 0xffffffff, text);
+	draw->AddText(pos - ImVec2(sz.x / 2, 0), ImColor(ImGui::GetStyle().Colors[ImGuiCol_Text]), text);
 }
 
 inline void DrawVLine(
     auto& draw, const ImVec2& min, const ImVec2& sz, double x, int col, float thickness = 1.0f)
 {
-	draw->AddLine(min + ImVec2(x, 0), min + ImVec2(x, sz.y), col, thickness);
+	draw->AddLine(min + ImVec2(x, 0), min + ImVec2(x, sz.y), col, thickness * scale);
 }
 
 

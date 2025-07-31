@@ -58,6 +58,8 @@ def vmax(a, b):
         return b
 
 def process(n):
+    text_color = n.text_color()
+    scale = n.scale()
     def var(name):
         *scope, varname = name.split(".")
         s = n.data
@@ -75,11 +77,20 @@ def process(n):
     # out_ready_var = var("out_ready")
 
     def dump(d):
+        def skip(name):
+            if name.endswith("_payload"):
+                return True
+            if "$" in name:
+                return True
+            if "$" in name and name.split("$")[-2].endswith("_payload"):
+                return True
+            if name.startswith("cfg"):
+                return True
         # print("hello", d.name)
         for name, subscope in d.subscopes.items():
             name = re.sub(r"(?<=genblk_ports\[)(\d)(?=\])", lambda m: Dir(int(m.group(1))).name, name)
-            # if m := re.search(r"genblk_ports[(\d)]", name):
-            #     name =
+            if skip(name):
+                continue
             open = imgui.tree_node("t:" + name)
             if imgui.begin_popup_context_item():
                 if imgui.selectable("add to viewer", False)[0]:
@@ -96,6 +107,9 @@ def process(n):
                 dump(subscope)
                 imgui.tree_pop()
         for name, v in d.variables.items():
+            if skip(name):
+                continue
+
             if "signal_flow_sample" in v.attrs or "signal_flow_sample_strobe" in v.attrs:
                 continue
             if imgui.selectable(name, 0)[0]:
@@ -117,7 +131,7 @@ def process(n):
         sz = imgui.calc_text_size(text)
         avail_sz = max - min
         if abs(avail_sz.x) > sz.x and abs(avail_sz.y) > sz.y:
-            draw.add_text(mid + middle - imgui.calc_text_size(text) / 2, 0xffffffff, text)
+            draw.add_text(mid + middle - imgui.calc_text_size(text) / 2, text_color, text)
 
 
 
@@ -170,7 +184,7 @@ def process(n):
         master_max = d.t((0.0, sz.y), (0.0, 0.0))
         master_max_fill = d.t((0.0, sz.y - sz_r.y * (1.0 - mo / mo_cap)), (0.0, 0.0))
 
-        draw.add_rect(mid + master_min, mid + master_max, 0xff7f007f)
+        draw.add_rect(mid + master_min, mid + master_max, 0xff7f007f, thickness=2*scale)
         draw.add_rect_filled(mid + master_min, mid + master_max_fill, 0xff7f007f)
         imgui.set_cursor_screen_pos(mid + (min(master_min.x, master_max.x), min(master_min.y, master_max.y)))
         bsz = master_max - master_min
@@ -197,7 +211,7 @@ def process(n):
             target_max = d.t(((vc + 1) * vc_s, sz.y), (0.0, 0.0))
             target_max_fill = d.t(((vc + 1) * vc_s, sz.y - sz_r.y * (1.0 - to / to_cap)), (0.0, 0.0))
 
-            draw.add_rect(mid + target_min, mid + target_max, 0xffff0000)
+            draw.add_rect(mid + target_min, mid + target_max, 0xffff0000, thickness=2*scale)
             draw.add_rect_filled(mid + target_min, mid + target_max_fill, 0xffff0000)
 
             imgui.set_cursor_screen_pos(mid + (min(target_min.x, target_max.x), min(target_min.y, target_max.y)))
@@ -225,15 +239,21 @@ def process(n):
             tip = handle + delta
             tip_s = sz.x / 5
             tip_delta = d.t((-tip_s, -tip_s), (0.0, 0.0))
-            draw.add_line(handle, handle + delta, 0xffffffff)
-            draw.add_line(tip, tip + tip_delta, 0xffffffff)
+            draw.add_line(handle, handle + delta, text_color, thickness=2*scale)
+            draw.add_line(tip, tip + tip_delta, text_color, thickness=2*scale)
             tip_delta = d.t((tip_s, -tip_s), (0.0, 0.0))
-            draw.add_line(tip, tip + tip_delta, 0xffffffff)
+            draw.add_line(tip, tip + tip_delta, text_color, thickness=2*scale)
 
 
             # TODO(robin): use flit parsing here by including memory_mapped_router.py
             v = var(f"link_{d.name.lower()[0]}_o__payload")
 
+            def pretty_up_label(label):
+                label = re.sub(r"{payload=[^}]*} ,", ",", label)
+                label = re.sub(r"payload=[^ ]* ,", "", label)
+                return label
+
+            font_factor = 1.0
             def packet_label(pos, text, var_value, t_size):
                 if pos is not None:
                     io = imgui.get_io()
@@ -251,14 +271,14 @@ def process(n):
                             # print(vv)
                             n.add_trace((var_value >> shift) & 0xffff_ffff)
                         imgui.end_popup()
-                    draw.add_text(pos, 0xffffffff, text)
+                    draw.add_text(None, imgui.get_font_size() / font_factor, pos, text_color, text)
 
             vv = n.get_current_var_value(v)
             vv_num = int(vv, 2)
             if vv_num != 0:
-                pretty = v.format(vv)
+                pretty = pretty_up_label(v.format(vv))
 
-                t_sz = imgui.calc_text_size(pretty)
+                t_sz = imgui.calc_text_size(pretty) / font_factor
                 if t_sz.x < 8 * sz.x:
                     pos = None
                     if d == Dir.NORTH:
@@ -269,15 +289,20 @@ def process(n):
 
             v = var(f"link_{d.name.lower()[0]}_i__p")
             vv = n.get_current_var_value(v)
-            if int(vv, 2) != 0:
-                pretty = v.format(vv)
+            vv_num = int(vv, 2)
+            if vv_num != 0:
+                pretty = pretty_up_label(v.format(vv))
 
-                t_sz = imgui.calc_text_size(pretty)
+                t_sz = imgui.calc_text_size(pretty) / font_factor
                 if t_sz.x < 8 * sz.x:
+                    pos = None
                     if d == Dir.NORTH:
-                        draw.add_text(handle - t_sz * (0.0, 0.0) + sz_r * (1.0, 0.0), 0xffffffff, pretty)
+                        pos = handle - t_sz * (0.0, 0.0) + sz_r * (1.0, 0.0)
+                        # draw.add_text(handle - t_sz * (0.0, 0.0) + sz_r * (1.0, 0.0), text_color, pretty)
                     if d == Dir.SOUTH:
-                        draw.add_text(handle - t_sz * (1.0, 1.0) - sz_r * (1.0, 0.0), 0xffffffff, pretty)
+                        pos = handle - t_sz * (1.0, 1.0) - sz_r * (1.5, 0.0)
+                        # draw.add_text(handle - t_sz * (1.0, 1.0) - sz_r * (1.0, 0.0), text_color, pretty)
+                    packet_label(pos, pretty, vv_num, t_sz)
 
             data_sent_var = var(f"{d.name.lower()}.data_sent")
             data_sent = n.get_current_var_value(data_sent_var)

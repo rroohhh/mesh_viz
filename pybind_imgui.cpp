@@ -5309,9 +5309,8 @@ void py_init_module_imgui_main(py::module& m)
         .def_readwrite("hover_flags_for_tooltip_nav", &ImGuiStyle::HoverFlagsForTooltipNav, "")
         // #ifdef IMGUI_BUNDLE_PYTHON_API
         //
-        // .def("color_",
-        //     &ImGuiStyle::Color_,
-        //     py::arg("idx_color"),
+        // .def("colors",
+        //     &ImGuiStyle::Colors,
         //     py::return_value_policy::reference)
         // .def("set_color_",
         //     &ImGuiStyle::SetColor_, py::arg("idx_color"), py::arg("color"))

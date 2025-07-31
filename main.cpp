@@ -44,8 +44,6 @@ void signalHandler(int signum)
 }
 
 
-float scale = 1;
-
 // Main code
 namespace po = boost::program_options;
 int main(int ac, char** av)
@@ -154,7 +152,7 @@ int main(int ac, char** av)
 	io.Fonts->AddFontFromMemoryTTF(
 	    fontawesome_ttf, fontawesome_ttf_size, fontsize, &icons_config, icons_ranges);
 
-	ImGui::StyleColorsDark();
+	ImGui::StyleColorsLight();
 	auto& style = ImGui::GetStyle();
 	style.PopupRounding = 5.0f;
 

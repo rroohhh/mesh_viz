@@ -25,13 +25,13 @@ void Node::render(
 	if (ImGui::IsRectVisible(min, max)) {
 		auto draw = ImGui::GetWindowDrawList();
 		if (role.is_fpga) {
-			draw->AddRect(min, max, FPGA_COL);
+			draw->AddRect(min, max, FPGA_COL, 0.0, 0, 2.0f * scale);
 		} else {
-			draw->AddRect(min, max, NODE_COL);
+			draw->AddRect(min, max, NODE_COL, 0.0, 0, 2.0f * scale);
 		}
 		if (highlight) {
 			draw->AddRect(
-			    min - ImVec2(2, 2), max + ImVec2(2, 2), NODE_HIGHLIGHT_COL, 0.0f, 0, 4.0f);
+			    min - ImVec2(2, 2), max + ImVec2(2, 2), NODE_HIGHLIGHT_COL, 0.0f, 0, 4.0f * scale);
 		}
 		// auto label_size = ImGui::CalcTextSize(label.c_str());
 		// auto node_size = max - min;
