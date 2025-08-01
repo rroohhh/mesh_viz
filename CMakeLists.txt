@@ -51,8 +51,8 @@ target_compile_options(mesh_viz PRIVATE -fmax-errors=1)
 # target_compile_options(mesh_viz PRIVATE -flto)
 # target_link_options(mesh_viz PRIVATE -flto)
 
-target_compile_options(mesh_viz PRIVATE -fsanitize=address)
-target_link_options(mesh_viz PRIVATE -fsanitize=address)
+# target_compile_options(mesh_viz PRIVATE -fsanitize=address)
+# target_link_options(mesh_viz PRIVATE -fsanitize=address)
 
 
 

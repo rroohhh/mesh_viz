@@ -80,7 +80,6 @@ int main(int ac, char** av)
 	SignalFlowTraces signal_flow_traces(f, cursor);
 	NodesPanel panel(
 	    f->read_nodes(&waveform_viewer, &histograms, &signal_flow_traces, &async_runner), cursor);
-	signal_flow_traces.load(panel.nodes);
 
 	auto process_func = module.attr("process");
 	if (run_script) {
@@ -88,6 +87,7 @@ int main(int ac, char** av)
 		main_func(panel.nodes);
 		return 0;
 	}
+	signal_flow_traces.load(panel.nodes);
 
 
 	glfwSetErrorCallback(glfw_error_callback);

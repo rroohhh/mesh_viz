@@ -55,7 +55,7 @@ SignalFlowData::SignalFlowData(
 		    auto clk = node->data.variables.at(SAMPLE_CLK);
 		    for (auto [name, var] : node->data.variables) {
 			    if (var.attrs.contains(SAMPLE_MARKER)) {
-				    std::println("reading flow data: {}", var.pretty_name());
+				    // std::println("reading flow data: {}", var.pretty_name());
 				    auto strobe = node->data.variables.at(name + "_strobe");
 				    // sample negedge, because that is where design inputs from the simulation are
 				    // changed
